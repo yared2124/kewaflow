@@ -218,8 +218,13 @@ export default function ContentStudioPage() {
             <div className="max-w-md mx-auto bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs space-y-3">
               {/* Post Author Bar */}
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-kewa-teal text-white font-bold text-xs flex items-center justify-center shrink-0">
-                  K
+                <div className="relative w-8 h-8 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+                  <Image
+                    src="/brand/kewakibt-icon.png"
+                    alt="Kewakibt Software Solutions"
+                    fill
+                    className="object-contain p-1"
+                  />
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-900 leading-tight">

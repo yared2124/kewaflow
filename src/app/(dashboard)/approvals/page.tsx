@@ -396,8 +396,13 @@ export default function ApprovalQueuePage() {
               {/* Rendered Facebook Post Preview */}
               <div className="border border-slate-200 rounded-xl p-3.5 bg-white space-y-2.5">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-kewa-teal text-white font-bold text-xs flex items-center justify-center">
-                    K
+                  <div className="relative w-7 h-7 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+                    <Image
+                      src="/brand/kewakibt-icon.png"
+                      alt="Kewakibt"
+                      fill
+                      className="object-contain p-0.5"
+                    />
                   </div>
                   <div>
                     <p className="text-xs font-bold text-slate-900 leading-tight">

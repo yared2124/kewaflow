@@ -45,19 +45,15 @@ export default function DashboardLayout({
         <div>
           {/* Logo Header */}
           <div className="h-16 flex items-center px-5 gap-2.5 border-b border-slate-100">
-            <div className="w-8 h-8 rounded-lg bg-kewa-teal flex items-center justify-center text-kewa-cyan font-bold text-lg shadow-xs">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-4 h-4 text-white"
-              >
-                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-                <line x1="4" y1="22" x2="4" y2="15" />
-              </svg>
+            <div className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0 flex items-center justify-center">
+              <Image
+                src="/brand/kewakibt-icon.png"
+                alt="KewaFlow"
+                width={32}
+                height={32}
+                className="object-contain"
+                priority
+              />
             </div>
             <span className="text-lg font-bold tracking-tight text-slate-900">
               KewaFlow
@@ -110,8 +106,14 @@ export default function DashboardLayout({
         {/* Sidebar Footer - Kewakibt Branding */}
         <div className="p-3 border-t border-slate-100 m-2">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-kewa-teal flex items-center justify-center text-white font-bold text-sm shadow-xs">
-              K
+            <div className="relative w-7 h-7 rounded-md overflow-hidden shrink-0 flex items-center justify-center">
+              <Image
+                src="/brand/kewakibt-icon.png"
+                alt="Kewakibt"
+                width={28}
+                height={28}
+                className="object-contain"
+              />
             </div>
             <div>
               <p className="text-xs font-bold text-slate-900 leading-tight">
