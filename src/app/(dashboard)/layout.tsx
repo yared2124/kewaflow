@@ -38,9 +38,10 @@ export default function DashboardLayout({
   ];
 
   return (
-    <div className="flex min-h-screen bg-kewa-bg">
-      {/* Compact Sidebar */}
-      <aside className="w-56 bg-white border-r border-slate-200 flex flex-col justify-between shrink-0">
+    // Fixed viewport height: prevents whole-page scrolling
+    <div className="h-screen w-screen overflow-hidden flex bg-kewa-bg">
+      {/* 1. Fixed Left Sidebar */}
+      <aside className="w-56 h-screen sticky top-0 bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 z-30 select-none">
         <div>
           {/* Logo Header */}
           <div className="h-16 flex items-center px-5 gap-2.5 border-b border-slate-100">
@@ -64,10 +65,12 @@ export default function DashboardLayout({
           </div>
 
           {/* Navigation Links with Dynamic Active State */}
-          <nav className="p-3 space-y-1">
+          <nav className="p-3 space-y-1 overflow-y-auto">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname?.startsWith(item.href));
+              const isActive =
+                pathname === item.href ||
+                (item.href !== "/dashboard" && pathname?.startsWith(item.href));
 
               return (
                 <Link
@@ -80,7 +83,11 @@ export default function DashboardLayout({
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Icon className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-400"}`} />
+                    <Icon
+                      className={`w-4 h-4 ${
+                        isActive ? "text-white" : "text-slate-400"
+                      }`}
+                    />
                     <span>{item.label}</span>
                   </div>
                   {item.badge && (
@@ -119,10 +126,10 @@ export default function DashboardLayout({
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Compact Top Header */}
-        <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0">
+      {/* 2. Main Area: Fixed Header + Scrollable Body */}
+      <div className="flex-1 h-screen flex flex-col min-w-0 overflow-hidden">
+        {/* Fixed Top Header (Never scrolls away) */}
+        <header className="h-16 sticky top-0 z-20 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 shadow-2xs">
           {/* Greeting */}
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-full bg-amber-50 flex items-center justify-center text-amber-500">
@@ -185,8 +192,8 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        {/* Page Body */}
-        <main className="flex-1 overflow-y-auto p-5">{children}</main>
+        {/* 3. Scrollable Page Body (Only content area scrolls) */}
+        <main className="flex-1 overflow-y-auto p-5 scroll-smooth">{children}</main>
       </div>
     </div>
   );
