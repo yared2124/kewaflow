@@ -1,6 +1,9 @@
+"use client";
+
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import {
   Home,
   PenTool,
@@ -21,6 +24,19 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
+  const navItems = [
+    { label: "Overview", href: "/dashboard", icon: Home },
+    { label: "Content Studio", href: "/content", icon: PenTool },
+    { label: "Approval Queue", href: "/approvals", icon: FileCheck2, badge: "3" },
+    { label: "Calendar", href: "/calendar", icon: CalendarIcon },
+    { label: "Media Library", href: "/media", icon: ImageIcon },
+    { label: "Leads", href: "/leads", icon: Users },
+    { label: "Brand Profile", href: "/brand", icon: Shield },
+    { label: "Settings", href: "/settings", icon: Settings },
+  ];
+
   return (
     <div className="flex min-h-screen bg-kewa-bg">
       {/* Compact Sidebar */}
@@ -47,76 +63,40 @@ export default function DashboardLayout({
             </span>
           </div>
 
-          {/* Navigation Links */}
+          {/* Navigation Links with Dynamic Active State */}
           <nav className="p-3 space-y-1">
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-kewa-teal text-white font-medium text-xs shadow-xs transition-colors"
-            >
-              <Home className="w-4 h-4 text-white" />
-              <span>Overview</span>
-            </Link>
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname?.startsWith(item.href));
 
-            <Link
-              href="/content"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium text-xs transition-colors"
-            >
-              <PenTool className="w-4 h-4 text-slate-400" />
-              <span>Content Studio</span>
-            </Link>
-
-            <Link
-              href="/approvals"
-              className="flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium text-xs transition-colors"
-            >
-              <div className="flex items-center gap-2.5">
-                <FileCheck2 className="w-4 h-4 text-slate-400" />
-                <span>Approval Queue</span>
-              </div>
-              <span className="px-1.5 py-0.2 text-[10px] font-semibold rounded-full bg-cyan-50 text-kewa-cyan-dark border border-cyan-100">
-                3
-              </span>
-            </Link>
-
-            <Link
-              href="/calendar"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium text-xs transition-colors"
-            >
-              <CalendarIcon className="w-4 h-4 text-slate-400" />
-              <span>Calendar</span>
-            </Link>
-
-            <Link
-              href="/media"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium text-xs transition-colors"
-            >
-              <ImageIcon className="w-4 h-4 text-slate-400" />
-              <span>Media Library</span>
-            </Link>
-
-            <Link
-              href="/leads"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium text-xs transition-colors"
-            >
-              <Users className="w-4 h-4 text-slate-400" />
-              <span>Leads</span>
-            </Link>
-
-            <Link
-              href="/brand"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium text-xs transition-colors"
-            >
-              <Shield className="w-4 h-4 text-slate-400" />
-              <span>Brand Profile</span>
-            </Link>
-
-            <Link
-              href="/settings"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium text-xs transition-colors"
-            >
-              <Settings className="w-4 h-4 text-slate-400" />
-              <span>Settings</span>
-            </Link>
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium text-xs transition-colors ${
+                    isActive
+                      ? "bg-kewa-teal text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Icon className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-400"}`} />
+                    <span>{item.label}</span>
+                  </div>
+                  {item.badge && (
+                    <span
+                      className={`px-1.5 py-0.2 text-[10px] font-semibold rounded-full border ${
+                        isActive
+                          ? "bg-teal-700/60 text-cyan-200 border-teal-600"
+                          : "bg-cyan-50 text-kewa-cyan-dark border-cyan-100"
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
           </nav>
         </div>
 
