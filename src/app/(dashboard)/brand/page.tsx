@@ -152,13 +152,9 @@ export default function BrandProfilePage() {
             <h1 className="text-xl font-bold tracking-tight text-slate-900">
               Brand Profile & AI Grounding
             </h1>
-            <span className="px-2 py-0.5 text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-              100% Grounded
-            </span>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Single source of truth for Kewakibt. AI text & graphics generation is strictly restricted to these verified facts (BRD-001, BRAND-007).
+          <p className="text-xs text-slate-700 mt-0.5">
+            Single source of truth for Kewakibt.
           </p>
         </div>
 
@@ -182,44 +178,40 @@ export default function BrandProfilePage() {
       <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg w-fit text-xs font-medium">
         <button
           onClick={() => setActiveTab("overview")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
-            activeTab === "overview"
-              ? "bg-white text-slate-900 shadow-2xs font-semibold"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${activeTab === "overview"
+            ? "bg-white text-slate-900 shadow-2xs font-semibold"
+            : "text-slate-600 hover:text-slate-900"
+            }`}
         >
           <Building2 className="w-3.5 h-3.5 text-kewa-teal" />
           Company Identity
         </button>
         <button
           onClick={() => setActiveTab("services")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
-            activeTab === "services"
-              ? "bg-white text-slate-900 shadow-2xs font-semibold"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${activeTab === "services"
+            ? "bg-white text-slate-900 shadow-2xs font-semibold"
+            : "text-slate-600 hover:text-slate-900"
+            }`}
         >
           <Layers className="w-3.5 h-3.5 text-kewa-teal" />
           Verified Services ({services.filter((s) => s.isVerified).length})
         </button>
         <button
           onClick={() => setActiveTab("voice")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
-            activeTab === "voice"
-              ? "bg-white text-slate-900 shadow-2xs font-semibold"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${activeTab === "voice"
+            ? "bg-white text-slate-900 shadow-2xs font-semibold"
+            : "text-slate-600 hover:text-slate-900"
+            }`}
         >
           <Palette className="w-3.5 h-3.5 text-kewa-teal" />
           Voice & Aesthetics
         </button>
         <button
           onClick={() => setActiveTab("audience")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
-            activeTab === "audience"
-              ? "bg-white text-slate-900 shadow-2xs font-semibold"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${activeTab === "audience"
+            ? "bg-white text-slate-900 shadow-2xs font-semibold"
+            : "text-slate-600 hover:text-slate-900"
+            }`}
         >
           <Target className="w-3.5 h-3.5 text-kewa-teal" />
           Target Audience & CTAs
@@ -413,22 +405,20 @@ export default function BrandProfilePage() {
             {services.map((srv) => (
               <div
                 key={srv.id}
-                className={`rounded-xl border p-4 shadow-2xs transition-colors flex flex-col justify-between ${
-                  srv.isVerified
-                    ? "bg-white border-slate-200"
-                    : "bg-amber-50/40 border-amber-200"
-                }`}
+                className={`rounded-xl border p-4 shadow-2xs transition-colors flex flex-col justify-between ${srv.isVerified
+                  ? "bg-white border-slate-200"
+                  : "bg-amber-50/40 border-amber-200"
+                  }`}
               >
                 <div>
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="text-sm font-bold text-slate-900">{srv.name}</h3>
                     <button
                       onClick={() => toggleVerifyService(srv.id)}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border flex items-center gap-1 transition-colors ${
-                        srv.isVerified
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-amber-100 text-amber-800 border-amber-300"
-                      }`}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border flex items-center gap-1 transition-colors ${srv.isVerified
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-amber-100 text-amber-800 border-amber-300"
+                        }`}
                     >
                       <CheckCircle2 className="w-3 h-3" />
                       {srv.isVerified ? "Verified (Active)" : "Draft (Unverified)"}
