@@ -103,14 +103,8 @@ export default function CalendarPage() {
             Content Calendar
           </h1>
           <p className="text-[11px] text-slate-500">
-            Review and manage scheduled posts. Stored in UTC and shown in your local timezone (EAT).
+            Review and manage scheduled posts.
           </p>
-        </div>
-
-        {/* Timezone & Scheduler Notice (SCHED-001, SCHED-003) */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-50 border border-cyan-100 text-[10px] font-semibold text-kewa-cyan-dark self-start sm:self-auto">
-          <Clock className="w-3.5 h-3.5 text-kewa-cyan-dark" />
-          <span>PostgreSQL Durable Outbox Active</span>
         </div>
       </div>
 
@@ -142,31 +136,28 @@ export default function CalendarPage() {
             <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
               <button
                 onClick={() => setViewMode("month")}
-                className={`py-1 px-3 rounded-md transition-colors cursor-pointer ${
-                  viewMode === "month"
-                    ? "bg-white text-kewa-teal shadow-xs font-bold"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`py-1 px-3 rounded-md transition-colors cursor-pointer ${viewMode === "month"
+                  ? "bg-white text-kewa-teal shadow-xs font-bold"
+                  : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 Month
               </button>
               <button
                 onClick={() => setViewMode("week")}
-                className={`py-1 px-3 rounded-md transition-colors cursor-pointer ${
-                  viewMode === "week"
-                    ? "bg-white text-kewa-teal shadow-xs font-bold"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`py-1 px-3 rounded-md transition-colors cursor-pointer ${viewMode === "week"
+                  ? "bg-white text-kewa-teal shadow-xs font-bold"
+                  : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 Week
               </button>
               <button
                 onClick={() => setViewMode("list")}
-                className={`py-1 px-3 rounded-md transition-colors cursor-pointer ${
-                  viewMode === "list"
-                    ? "bg-white text-kewa-teal shadow-xs font-bold"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`py-1 px-3 rounded-md transition-colors cursor-pointer ${viewMode === "list"
+                  ? "bg-white text-kewa-teal shadow-xs font-bold"
+                  : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 List
               </button>
@@ -204,19 +195,17 @@ export default function CalendarPage() {
                   return (
                     <div
                       key={`day-${dayNum}`}
-                      className={`h-16 rounded-lg border p-1 flex flex-col justify-between transition-colors ${
-                        isToday
-                          ? "border-kewa-teal/40 bg-teal-50/20"
-                          : "border-slate-100 bg-white hover:border-slate-200 hover:bg-slate-50/50"
-                      }`}
+                      className={`h-16 rounded-lg border p-1 flex flex-col justify-between transition-colors ${isToday
+                        ? "border-kewa-teal/40 bg-teal-50/20"
+                        : "border-slate-100 bg-white hover:border-slate-200 hover:bg-slate-50/50"
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <span
-                          className={`text-[10px] font-bold leading-none ${
-                            isToday
-                              ? "w-4 h-4 rounded-full bg-kewa-teal text-white flex items-center justify-center text-[9px]"
-                              : "text-slate-600"
-                          }`}
+                          className={`text-[10px] font-bold leading-none ${isToday
+                            ? "w-4 h-4 rounded-full bg-kewa-teal text-white flex items-center justify-center text-[9px]"
+                            : "text-slate-600"
+                            }`}
                         >
                           {dayNum}
                         </span>
