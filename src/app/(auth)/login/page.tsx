@@ -9,9 +9,6 @@ import {
   Lock,
   Eye,
   EyeOff,
-  Sparkles,
-  Calendar,
-  Users,
   Shield,
   ArrowRight,
 } from "lucide-react";
@@ -36,137 +33,23 @@ export default function LoginPage() {
   return (
     <div className="h-screen w-screen overflow-hidden flex flex-col lg:flex-row bg-[#F4F7F9] font-sans select-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
       {/* ============================================================ */}
-      {/* LEFT SIDE: Deep Petrol Teal Hero with 3D Mockup              */}
+      {/* LEFT SIDE: High-Resolution Hero Graphic                      */}
       {/* ============================================================ */}
-      <div className="h-full lg:w-[52%] bg-gradient-to-br from-[#123942] via-[#164854] to-[#0E2F37] text-white flex flex-col justify-between p-6 sm:p-8 lg:p-10 xl:p-12 relative overflow-hidden shrink-0">
-        {/* Soft Background Radial Lighting */}
-        <div className="absolute top-1/4 right-0 w-[450px] h-[450px] bg-[#00CECB]/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-20 w-72 h-72 bg-[#134E5E]/40 rounded-full blur-2xl pointer-events-none" />
-
-        {/* 1. Header: Logo & Tagline */}
-        <div className="relative z-10">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 p-1.5 flex items-center justify-center shrink-0 shadow-xs">
-              <Image
-                src="/brand/kewakibt-icon.png"
-                alt="KewaFlow Icon"
-                width={26}
-                height={26}
-                className="object-contain brightness-200"
-                priority
-              />
-            </div>
-            <div>
-              <span className="text-xl font-bold tracking-tight text-white block leading-none">
-                KewaFlow
-              </span>
-              <span className="text-[10px] text-teal-100/70 font-medium tracking-normal mt-0.5 block">
-                AI-Powered Social Media & Lead Management
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 2. Main Headline & Subtitle */}
-        <div className="relative z-10 my-auto py-2 space-y-3 max-w-md">
-          <h1 className="text-3xl sm:text-4xl lg:text-4xl font-extrabold tracking-tight text-white leading-[1.12]">
-            Grow Your Brand,
-            <br />
-            <span className="text-teal-200">Smarter.</span>
-          </h1>
-
-          <p className="text-xs text-teal-100/75 max-w-sm leading-relaxed font-normal">
-            Create, schedule, and manage your social media content — all in one place. Turn your ideas into engagement and real business growth.
-          </p>
-
-          {/* 3 Core Feature Items */}
-          <div className="space-y-3 pt-1">
-            {/* Feature 1 */}
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center text-teal-200 shrink-0">
-                <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
-              </div>
-              <div>
-                <span className="font-bold text-xs text-white block">
-                  AI Content Creation
-                </span>
-                <span className="text-[10px] text-teal-100/70 block">
-                  Generate high-quality content with AI
-                </span>
-              </div>
-            </div>
-
-            {/* Feature 2 */}
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center text-teal-200 shrink-0">
-                <Calendar className="w-3.5 h-3.5 text-teal-200" />
-              </div>
-              <div>
-                <span className="font-bold text-xs text-white block">
-                  Smart Scheduling
-                </span>
-                <span className="text-[10px] text-teal-100/70 block">
-                  Post at the best time, automatically
-                </span>
-              </div>
-            </div>
-
-            {/* Feature 3 */}
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center text-teal-200 shrink-0">
-                <Users className="w-3.5 h-3.5 text-emerald-300" />
-              </div>
-              <div>
-                <span className="font-bold text-xs text-white block">
-                  Lead Management
-                </span>
-                <span className="text-[10px] text-teal-100/70 block">
-                  Turn engagement into real business
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 3D Devices Graphic (Laptop + Mobile + Social Floating Badges) */}
-        <div className="relative z-10 hidden sm:block absolute right-2 lg:right-4 bottom-8 lg:bottom-8 w-56 lg:w-64 pointer-events-none">
-          <Image
-            src="/images/login-devices.png"
-            alt="KewaFlow Dashboard and Mobile App Mockup"
-            width={280}
-            height={320}
-            className="object-contain drop-shadow-2xl"
-            priority
-          />
-        </div>
-
-        {/* 3. Bottom Hand-drawn Script Tagline */}
-        <div className="relative z-10 pt-1">
-          <div className="inline-block transform -rotate-3 text-cyan-200 font-serif italic text-base sm:text-lg tracking-wide select-none">
-            <span className="block leading-snug">Build your brand.</span>
-            <span className="block leading-snug">Grow your business.</span>
-            {/* Hand-drawn Underline SVG */}
-            <svg
-              className="w-32 h-1.5 text-cyan-300/80 mt-0.5"
-              viewBox="0 0 144 8"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M2 5.5C40 2 100 2 142 5.5"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
-            </svg>
-          </div>
-        </div>
+      <div className="hidden lg:relative lg:block lg:w-[50%] xl:w-[52%] h-full bg-[#103841] overflow-hidden shrink-0">
+        <Image
+          src="/images/login-hero.jpg"
+          alt="KewaFlow — AI-Powered Social Media & Lead Management"
+          fill
+          priority
+          sizes="(min-width: 1024px) 52vw, 100vw"
+          className="object-cover object-center select-none pointer-events-none"
+        />
       </div>
 
       {/* ============================================================ */}
       {/* RIGHT SIDE: Clean Modern Form matching exact user mockup     */}
       {/* ============================================================ */}
-      <div className="h-full lg:w-[48%] bg-white flex flex-col justify-between p-6 sm:p-8 lg:p-10 xl:p-12 overflow-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="h-full w-full lg:w-[50%] xl:w-[48%] bg-white flex flex-col justify-between p-6 sm:p-8 lg:p-10 xl:p-12 overflow-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {/* Top Right: "Don't have an account? Contact admin ->" */}
         <div className="flex items-center justify-end gap-2 text-xs text-slate-500 shrink-0">
           <span className="text-[11px]">Don't have an account?</span>
