@@ -168,7 +168,7 @@ export default function MediaLibraryPage() {
             Media Library
           </h1>
           <p className="text-[11px] text-slate-500">
-            Manage your images, videos and brand assets. Stored in S3-compatible storage.
+            Manage your images, videos and brand assets.
           </p>
         </div>
 
