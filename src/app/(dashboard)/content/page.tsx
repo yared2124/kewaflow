@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
-  Sparkles,
   Send,
   Save,
   CheckCircle2,
@@ -71,13 +70,9 @@ export default function ContentStudioPage() {
           <h1 className="text-base font-bold text-slate-900 leading-tight">
             Content Studio
           </h1>
-          <p className="text-[11px] text-slate-500">
-            Create engaging content with AI grounded in your verified brand profile.
+          <p className="text-[12px] text-slate-700">
+            Create engaging content with AI
           </p>
-        </div>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-50 border border-cyan-100 text-[10px] font-semibold text-kewa-cyan-dark self-start sm:self-auto">
-          <ShieldCheck className="w-3.5 h-3.5 text-kewa-cyan-dark" />
-          <span>Brand Grounding Active</span>
         </div>
       </div>
 
@@ -89,21 +84,19 @@ export default function ContentStudioPage() {
           <div className="flex items-center border-b border-slate-100 pb-2 gap-4">
             <button
               onClick={() => setActiveTab("text")}
-              className={`text-xs font-bold pb-1 transition-colors relative ${
-                activeTab === "text"
-                  ? "text-kewa-teal border-b-2 border-kewa-teal"
-                  : "text-slate-400 hover:text-slate-700"
-              }`}
+              className={`text-xs font-bold pb-1 transition-colors relative ${activeTab === "text"
+                ? "text-kewa-teal border-b-2 border-kewa-teal"
+                : "text-slate-400 hover:text-slate-700"
+                }`}
             >
               Text Generation
             </button>
             <button
               onClick={() => setActiveTab("image")}
-              className={`text-xs font-bold pb-1 transition-colors relative ${
-                activeTab === "image"
-                  ? "text-kewa-teal border-b-2 border-kewa-teal"
-                  : "text-slate-400 hover:text-slate-700"
-              }`}
+              className={`text-xs font-bold pb-1 transition-colors relative ${activeTab === "image"
+                ? "text-kewa-teal border-b-2 border-kewa-teal"
+                : "text-slate-400 hover:text-slate-700"
+                }`}
             >
               Image Generation
             </button>
@@ -135,9 +128,7 @@ export default function ContentStudioPage() {
                   Verified Service
                   <HelpCircle className="w-3 h-3 text-slate-400" />
                 </label>
-                <span className="text-[10px] text-emerald-600 font-semibold">
-                  ✓ Verified
-                </span>
+
               </div>
               <select
                 value={verifiedService}
@@ -193,10 +184,7 @@ export default function ContentStudioPage() {
                 <span>Generating grounded copy...</span>
               </>
             ) : (
-              <>
-                <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
-                <span>Generate Content</span>
-              </>
+              <span>Generate Content</span>
             )}
           </button>
         </div>
