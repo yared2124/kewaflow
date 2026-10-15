@@ -72,27 +72,24 @@ export default function DashboardLayout({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium text-xs transition-colors ${
-                    isActive
-                      ? "bg-kewa-teal text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-                  }`}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium text-xs transition-colors ${isActive
+                    ? "bg-kewa-teal text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <Icon
-                      className={`w-4 h-4 ${
-                        isActive ? "text-white" : "text-slate-400"
-                      }`}
+                      className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-400"
+                        }`}
                     />
                     <span>{item.label}</span>
                   </div>
                   {item.badge && (
                     <span
-                      className={`px-1.5 py-0.2 text-[10px] font-semibold rounded-full border ${
-                        isActive
-                          ? "bg-teal-700/60 text-cyan-200 border-teal-600"
-                          : "bg-cyan-50 text-kewa-cyan-dark border-cyan-100"
-                      }`}
+                      className={`px-1.5 py-0.2 text-[10px] font-semibold rounded-full border ${isActive
+                        ? "bg-teal-700/60 text-cyan-200 border-teal-600"
+                        : "bg-cyan-50 text-kewa-cyan-dark border-cyan-100"
+                        }`}
                     >
                       {item.badge}
                     </span>
@@ -115,16 +112,7 @@ export default function DashboardLayout({
                 className="object-contain"
               />
             </div>
-            <div>
-              <p className="text-xs font-bold text-slate-900 leading-tight">
-                Kewakibt
-              </p>
-              <p className="text-[10px] text-slate-500">Software Solutions</p>
-            </div>
           </div>
-          <p className="text-[10px] text-slate-400 mt-1.5 font-medium">
-            Build • Automate • Grow
-          </p>
         </div>
       </aside>
 
@@ -134,17 +122,7 @@ export default function DashboardLayout({
         <header className="h-16 sticky top-0 z-20 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 shadow-2xs">
           {/* Greeting */}
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-amber-50 flex items-center justify-center text-amber-500">
-              <Sun className="w-4 h-4" />
-            </div>
-            <div>
-              <h1 className="text-base font-bold text-slate-900 leading-tight">
-                Good morning, Yared
-              </h1>
-              <p className="text-[11px] text-slate-500">
-                Your marketing, reviewed and ready.
-              </p>
-            </div>
+
           </div>
 
           {/* Right Header Controls */}
@@ -196,7 +174,7 @@ export default function DashboardLayout({
 
         {/* 3. Scrollable Page Body (Only content area scrolls) */}
         <main className="flex-1 overflow-y-auto p-5 scroll-smooth">{children}</main>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 }
