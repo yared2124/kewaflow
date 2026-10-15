@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import {
-  FileCheck2,
   CheckCircle2,
   XCircle,
   Eye,
@@ -93,8 +92,8 @@ export default function ApprovalQueuePage() {
     activeTab === "pending"
       ? pendingItems
       : activeTab === "approved"
-      ? approvedItems
-      : rejectedItems;
+        ? approvedItems
+        : rejectedItems;
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) =>
@@ -148,11 +147,6 @@ export default function ApprovalQueuePage() {
           </p>
         </div>
 
-        {/* Cardinal Rule Badge */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-50 border border-cyan-100 text-[10px] font-semibold text-kewa-cyan-dark self-start sm:self-auto">
-          <FileCheck2 className="w-3.5 h-3.5 text-kewa-cyan-dark" />
-          <span>Zero Autonomous Publishing</span>
-        </div>
       </div>
 
       {/* Main Container */}
@@ -163,19 +157,17 @@ export default function ApprovalQueuePage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab("pending")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                activeTab === "pending"
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${activeTab === "pending"
                   ? "bg-kewa-teal text-white shadow-xs"
                   : "text-slate-600 hover:bg-slate-50"
-              }`}
+                }`}
             >
               <span>Pending</span>
               <span
-                className={`px-1.5 py-0.2 text-[10px] rounded-full font-semibold ${
-                  activeTab === "pending"
+                className={`px-1.5 py-0.2 text-[10px] rounded-full font-semibold ${activeTab === "pending"
                     ? "bg-teal-700/60 text-cyan-200"
                     : "bg-slate-100 text-slate-600"
-                }`}
+                  }`}
               >
                 {pendingItems.length}
               </span>
@@ -183,19 +175,17 @@ export default function ApprovalQueuePage() {
 
             <button
               onClick={() => setActiveTab("approved")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                activeTab === "approved"
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${activeTab === "approved"
                   ? "bg-kewa-teal text-white shadow-xs"
                   : "text-slate-600 hover:bg-slate-50"
-              }`}
+                }`}
             >
               <span>Approved</span>
               <span
-                className={`px-1.5 py-0.2 text-[10px] rounded-full font-semibold ${
-                  activeTab === "approved"
+                className={`px-1.5 py-0.2 text-[10px] rounded-full font-semibold ${activeTab === "approved"
                     ? "bg-teal-700/60 text-cyan-200"
                     : "bg-slate-100 text-slate-600"
-                }`}
+                  }`}
               >
                 {approvedItems.length}
               </span>
@@ -203,19 +193,17 @@ export default function ApprovalQueuePage() {
 
             <button
               onClick={() => setActiveTab("rejected")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                activeTab === "rejected"
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${activeTab === "rejected"
                   ? "bg-kewa-teal text-white shadow-xs"
                   : "text-slate-600 hover:bg-slate-50"
-              }`}
+                }`}
             >
               <span>Rejected</span>
               <span
-                className={`px-1.5 py-0.2 text-[10px] rounded-full font-semibold ${
-                  activeTab === "rejected"
+                className={`px-1.5 py-0.2 text-[10px] rounded-full font-semibold ${activeTab === "rejected"
                     ? "bg-teal-700/60 text-cyan-200"
                     : "bg-slate-100 text-slate-600"
-                }`}
+                  }`}
               >
                 {rejectedItems.length}
               </span>
