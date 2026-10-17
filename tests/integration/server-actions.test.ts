@@ -31,6 +31,8 @@ test("Step 2: Server Actions Layer Integration Tests", async (t) => {
       tagline: "Build • Automate • Grow",
       verifiedServices: [
         { name: "Custom Systems", description: "Tailored enterprise code" },
+        { name: "Business Process Automation", description: "Workflow automation" },
+        { name: "Cloud Architecture", description: "High availability setup" },
       ],
       verifiedFacts: { location: "Addis Ababa" },
       aiMonthlyBudgetCap: 50.0,
@@ -77,8 +79,12 @@ test("Step 2: Server Actions Layer Integration Tests", async (t) => {
       reviewedDiff: true,
     });
     assert.equal(okRes.success, true);
-    assert.ok(okRes.approval);
-    assert.equal(okRes.approval.status, "ACTIVE");
+    if ("approval" in okRes && okRes.approval) {
+      assert.ok(okRes.approval);
+      assert.equal(okRes.approval.status, "ACTIVE");
+    } else {
+      assert.fail("okRes should contain approval");
+    }
   });
 
   await t.test("content.actions: update item invalidates prior approval (APR-003)", async () => {

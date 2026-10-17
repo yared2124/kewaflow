@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import {
   ShieldCheck,
@@ -24,7 +24,9 @@ import {
   FileCheck2,
   HelpCircle,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
+import { getBrandProfile, updateBrandProfile } from "@/server/actions/brand";
 
 interface ServiceItem {
   id: string;
@@ -47,6 +49,9 @@ export default function BrandProfilePage() {
     "overview" | "services" | "voice" | "audience"
   >("overview");
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Form states for Brand Profile (BRAND-001)
   const [companyName, setCompanyName] = useState("Kewakibt Software Solutions PLC");
@@ -58,6 +63,50 @@ export default function BrandProfilePage() {
   const [email, setEmail] = useState("contact@kewakibt.com");
   const [phone, setPhone] = useState("+251 91 123 4567");
   const [website, setWebsite] = useState("https://kewakibt.com");
+  const [budgetCap, setBudgetCap] = useState(50.0);
+
+  // Load from database on mount
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const res = await getBrandProfile();
+        if (res.success && res.profile) {
+          const p = res.profile;
+          setCompanyName(p.brandName);
+          if (p.tagline) setTagline(p.tagline);
+          if (p.aiMonthlyBudgetCap) setBudgetCap(Number(p.aiMonthlyBudgetCap));
+
+          const facts = p.verifiedFacts as any;
+          if (facts) {
+            if (facts.description) setDescription(facts.description);
+            if (facts.headquarters) setHeadquarters(facts.headquarters);
+            if (facts.primaryEmail) setEmail(facts.primaryEmail);
+            if (facts.primaryPhone) setPhone(facts.primaryPhone);
+            if (facts.website) setWebsite(facts.website);
+          }
+
+          const srvs = p.verifiedServices as any[];
+          if (srvs && Array.isArray(srvs) && srvs.length > 0) {
+            setServices(
+              srvs.map((s, idx) => ({
+                id: s.id || `srv-${idx + 1}`,
+                name: s.name || "",
+                description: s.description || "",
+                targetPainPoint: s.targetPainPoint || "",
+                isVerified: s.isVerified ?? true,
+                deliverables: s.deliverables || [],
+              }))
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load brand profile from database:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadProfile();
+  }, []);
 
   // Services Catalogue (BRAND-002)
   const [services, setServices] = useState<ServiceItem[]>([
@@ -132,9 +181,35 @@ export default function BrandProfilePage() {
     { name: "Teal Brand", hex: "#134E5E", class: "bg-[#134E5E]", text: "text-white" },
   ];
 
-  const handleSave = () => {
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const res = await updateBrandProfile({
+        brandName: companyName,
+        tagline,
+        verifiedServices: services,
+        verifiedFacts: {
+          description,
+          headquarters,
+          primaryEmail: email,
+          primaryPhone: phone,
+          website,
+        },
+        aiMonthlyBudgetCap: budgetCap,
+      });
+
+      if (res.success) {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3500);
+      } else {
+        setSaveError(res.error || "Failed to save brand profile.");
+      }
+    } catch (err: any) {
+      setSaveError(err.message || "Failed to save brand profile.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const toggleVerifyService = (id: string) => {
@@ -152,6 +227,11 @@ export default function BrandProfilePage() {
             <h1 className="text-xl font-bold tracking-tight text-slate-900">
               Brand Profile & AI Grounding
             </h1>
+            {isLoading && (
+              <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" /> Loading from database...
+              </span>
+            )}
           </div>
           <p className="text-xs text-slate-700 mt-0.5">
             Single source of truth for Kewakibt.
@@ -159,6 +239,11 @@ export default function BrandProfilePage() {
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
+          {saveError && (
+            <span className="text-xs text-rose-600 font-medium flex items-center gap-1 animate-in fade-in">
+              <AlertCircle className="w-3.5 h-3.5" /> {saveError}
+            </span>
+          )}
           {saveSuccess && (
             <span className="text-xs text-emerald-600 font-medium flex items-center gap-1 animate-in fade-in">
               <Check className="w-3.5 h-3.5" /> Saved & Verified
@@ -166,10 +251,15 @@ export default function BrandProfilePage() {
           )}
           <button
             onClick={handleSave}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-kewa-teal hover:bg-teal-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors"
+            disabled={isSaving || isLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-kewa-teal hover:bg-teal-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
           >
-            <Save className="w-3.5 h-3.5" />
-            Save Profile
+            {isSaving ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            {isSaving ? "Saving..." : "Save Profile"}
           </button>
         </div>
       </div>
