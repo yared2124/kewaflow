@@ -1,9 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Home,
   PenTool,
@@ -16,6 +16,7 @@ import {
   Sun,
   ChevronRight,
   ChevronDown,
+  LogOut,
 } from "lucide-react";
 import { MOCK_ADMIN_USER, MOCK_CONNECTED_PAGE } from "@/lib/mock-data";
 
@@ -25,6 +26,38 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        profileDropdownRef.current &&
+        !profileDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsProfileOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsProfileOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  const handleLogout = () => {
+    setIsProfileOpen(false);
+    router.push("/login");
+  };
 
   const navItems = [
     { label: "Overview", href: "/dashboard", icon: Home },
@@ -100,20 +133,6 @@ export default function DashboardLayout({
           </nav>
         </div>
 
-        {/* Sidebar Footer - Kewakibt Branding */}
-        <div className="p-3 border-t border-slate-100 m-2">
-          <div className="flex items-center gap-2.5">
-            <div className="relative w-7 h-7 rounded-md overflow-hidden shrink-0 flex items-center justify-center">
-              <Image
-                src="/brand/kewakibt-icon.png"
-                alt="Kewakibt"
-                width={28}
-                height={28}
-                className="object-contain"
-              />
-            </div>
-          </div>
-        </div>
       </aside>
 
       {/* 2. Main Area: Fixed Header + Scrollable Body */}
@@ -149,25 +168,114 @@ export default function DashboardLayout({
               <ChevronRight className="w-3.5 h-3.5 text-slate-400 ml-0.5" />
             </div>
 
-            {/* Admin Profile */}
-            <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
-              <div className="relative w-8 h-8 rounded-full overflow-hidden border border-slate-200">
-                <Image
-                  src={MOCK_ADMIN_USER.avatarUrl}
-                  alt={MOCK_ADMIN_USER.name}
-                  fill
-                  className="object-cover"
+            {/* Admin Profile Dropdown (Hover & Click supported) */}
+            <div
+              ref={profileDropdownRef}
+              className="relative pl-2 border-l border-slate-200"
+              onMouseEnter={() => setIsProfileOpen(true)}
+              onMouseLeave={() => setIsProfileOpen(false)}
+            >
+              <button
+                type="button"
+                onClick={() => setIsProfileOpen((prev) => !prev)}
+                className="flex items-center gap-2.5 p-1 -m-1 rounded-xl hover:bg-slate-50 transition-colors text-left focus:outline-none cursor-pointer group"
+                aria-expanded={isProfileOpen}
+                aria-haspopup="true"
+              >
+                <div className="relative w-8 h-8 rounded-full overflow-hidden border border-slate-200 group-hover:border-slate-300 transition-colors shrink-0">
+                  <Image
+                    src={MOCK_ADMIN_USER.avatarUrl}
+                    alt={MOCK_ADMIN_USER.name}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                <div className="text-left hidden sm:block">
+                  <p className="text-xs font-bold text-slate-900 leading-tight group-hover:text-kewa-teal transition-colors">
+                    {MOCK_ADMIN_USER.name}
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    {MOCK_ADMIN_USER.role}
+                  </p>
+                </div>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                    isProfileOpen ? "rotate-180 text-kewa-teal" : "group-hover:text-slate-600"
+                  }`}
                 />
-              </div>
-              <div className="text-left hidden sm:block">
-                <p className="text-xs font-bold text-slate-900 leading-tight">
-                  {MOCK_ADMIN_USER.name}
-                </p>
-                <p className="text-[10px] text-slate-500">
-                  {MOCK_ADMIN_USER.role}
-                </p>
-              </div>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+
+              {/* Dropdown Menu */}
+              {isProfileOpen && (
+                <div
+                  className="absolute right-0 top-full pt-1.5 z-50 w-64 animate-in fade-in slide-in-from-top-1 duration-150"
+                  role="menu"
+                >
+                  <div className="bg-white rounded-xl shadow-xl border border-slate-200/90 p-1.5 divide-y divide-slate-100">
+                    {/* User Info Header */}
+                    <div className="px-3 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-200 shrink-0">
+                          <Image
+                            src={MOCK_ADMIN_USER.avatarUrl}
+                            alt={MOCK_ADMIN_USER.name}
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <p className="text-xs font-bold text-slate-900 truncate leading-tight">
+                              {MOCK_ADMIN_USER.name}
+                            </p>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                              {MOCK_ADMIN_USER.role}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                            {MOCK_ADMIN_USER.email}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick Links */}
+                    <div className="py-1">
+                      <Link
+                        href="/settings"
+                        onClick={() => setIsProfileOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors"
+                        role="menuitem"
+                      >
+                        <Settings className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Settings</span>
+                      </Link>
+                      <Link
+                        href="/settings/security"
+                        onClick={() => setIsProfileOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors"
+                        role="menuitem"
+                      >
+                        <Shield className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Security & MFA</span>
+                      </Link>
+                    </div>
+
+                    {/* Logout Action */}
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors text-left cursor-pointer"
+                        role="menuitem"
+                      >
+                        <LogOut className="w-3.5 h-3.5 text-rose-500" />
+                        <span>Log Out</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>

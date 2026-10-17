@@ -1,0 +1,261 @@
+// Prisma schema for KewaFlow
+// Complies with Approval-First Architecture and Invariants (AGENTS.md)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==========================================
+// Multi-Axis State Machine Enums (AGENTS.md §3)
+// ==========================================
+
+enum ContentReviewState {
+  DRAFT
+  GENERATING
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum JobState {
+  UNSCHEDULED
+  SCHEDULED
+  PUBLISHING
+  CANCELLED
+  DEAD_LETTERED
+}
+
+enum PublicationOutcome {
+  NOT_PUBLISHED
+  UNCERTAIN
+  PUBLISHED
+  FAILED
+  ARCHIVED
+}
+
+enum ApprovalStatus {
+  ACTIVE
+  INVALIDATED
+  EXPIRED
+}
+
+enum LeadStage {
+  INQUIRY
+  QUALIFIED
+  PROPOSAL
+  WON
+  LOST
+}
+
+enum AttributionType {
+  DIRECT
+  ASSISTED
+  UNKNOWN
+}
+
+enum AttemptStatus {
+  PENDING
+  IN_FLIGHT
+  SUCCESS
+  UNCERTAIN
+  FAILED
+}
+
+// ==========================================
+// Approval Integrity Models (APR-001 -> APR-009)
+// ==========================================
+
+model ContentItem {
+  id                 String             @id @default(cuid())
+  title              String
+  
+  // Independent 3-Axis States
+  reviewState        ContentReviewState @default(DRAFT)
+  jobState           JobState           @default(UNSCHEDULED)
+  publicationOutcome PublicationOutcome @default(NOT_PUBLISHED)
+
+  targetPlatform     String             @default("FACEBOOK") // FACEBOOK, INSTAGRAM
+  destinationPageId  String?
+  scheduledAt        DateTime?
+
+  currentVersionId   String?            @unique
+  currentVersion     ContentVersion?    @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+
+  versions           ContentVersion[]   @relation("ItemVersions")
+  approvals          ApprovalRecord[]
+  publishingAttempts PublishingAttempt[]
+  leads              Lead[]
+
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([reviewState])
+  @@index([jobState])
+  @@index([publicationOutcome])
+  @@index([scheduledAt])
+}
+
+model ContentVersion {
+  id                   String          @id @default(cuid())
+  contentItemId        String
+  contentItem          ContentItem     @relation("ItemVersions", fields: [contentItemId], references: [id], onDelete: Cascade)
+  
+  versionNumber        Int
+  versionHash          String          // Deterministic SHA-256 hash (APR-001)
+
+  caption              String          @db.Text
+  mediaUrls            Json            @default("[]") // string[]
+  mediaHashes          Json            @default("[]") // sha256 of media files
+  destinationPageId    String
+  ctaUrl               String?
+  disclosures          String?
+  scheduledTime        DateTime?
+  adConfig             Json?           // Objective, budget, audience, bid
+  
+  // APR-007: Blocking AI-flagged facts requiring verification
+  flaggedFacts         Json?           // Array of unverified statements
+  flaggedFactsResolved Boolean         @default(true)
+
+  isCurrentFor         ContentItem?    @relation("CurrentVersion")
+  approvals            ApprovalRecord[]
+  publishingAttempts   PublishingAttempt[]
+
+  createdAt            DateTime        @default(now())
+
+  @@unique([contentItemId, versionNumber])
+  @@index([versionHash])
+}
+
+model ApprovalRecord {
+  id                  String         @id @default(cuid())
+  contentItemId       String
+  contentItem         ContentItem    @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  
+  contentVersionId    String
+  contentVersion      ContentVersion @relation(fields: [contentVersionId], references: [id], onDelete: Cascade)
+
+  adminId             String
+  adminSessionId      String
+  status              ApprovalStatus @default(ACTIVE)
+
+  // APR-009: Friction UX Verification
+  reviewedDiff        Boolean        @default(true)
+  confirmedExactFinal Boolean        @default(true)
+
+  approvedAt          DateTime       @default(now())
+  invalidatedAt       DateTime?
+  expiresAt           DateTime       // approvedAt + 30 calendar days (APR-006)
+
+  createdAt           DateTime       @default(now())
+
+  @@index([contentVersionId, status])
+  @@index([status, expiresAt])
+}
+
+model PublishingAttempt {
+  id               String         @id @default(cuid())
+  contentItemId    String
+  contentItem      ContentItem    @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  contentVersionId String
+  contentVersion   ContentVersion @relation(fields: [contentVersionId], references: [id], onDelete: Cascade)
+
+  // Idempotency: contentVersionId:pageId:attemptIndex (ADR-004)
+  idempotencyKey   String         @unique
+  attemptIndex     Int            @default(1)
+
+  status           AttemptStatus  @default(PENDING)
+  platformPostId   String?
+  platformResponse Json?
+  errorMessage     String?
+
+  dispatchedAt     DateTime       @default(now())
+  completedAt      DateTime?
+
+  @@index([contentItemId, status])
+  @@index([idempotencyKey])
+}
+
+// ==========================================
+// CRM & Attribution (CRM-001 -> CRM-005)
+// ==========================================
+
+model Lead {
+  id              String          @id @default(cuid())
+  name            String
+  contactChannel  String          // WhatsApp, DM, Form, Email
+  contactIdentifier String        // Pseudonymized or raw contact identifier
+  
+  stage           LeadStage       @default(INQUIRY)
+  attributionType AttributionType @default(UNKNOWN)
+  sourceCampaign  String?
+  
+  contentItemId   String?
+  contentItem     ContentItem?    @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+
+  notes           String?         @db.Text
+  dealValueUsd    Decimal?        @db.Decimal(10, 2)
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([stage])
+  @@index([attributionType])
+}
+
+// ==========================================
+// Brand Grounding (BRD-001 -> BRD-003)
+// ==========================================
+
+model BrandProfile {
+  id                String   @id @default("default")
+  brandName         String   @default("Kewakibt Software Solutions")
+  tagline           String?
+  verifiedServices  Json     // Array of approved services & capabilities
+  verifiedFacts     Json     // Approved facts, pricing models, tech stack
+  voiceGuidelines   Json?    // Tone of voice, forbidden claims
+  aiMonthlyBudgetCap Decimal @default(0.00) @db.Decimal(10, 2)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ==========================================
+// AI Spend Ledger & Audit Logging
+// ==========================================
+
+model AiSpendLedger {
+  id               String   @id @default(cuid())
+  provider         String   // openai, anthropic, google, etc.
+  model            String
+  operationType    String   // caption_generation, image_generation, fact_check
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  costUsd          Decimal  @db.Decimal(10, 4)
+  
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([provider])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  action     String   // e.g. "APPROVE_CONTENT", "INVALIDATE_APPROVAL", "LAUNCH_AD"
+  entityType String   // e.g. "ContentItem", "ApprovalRecord", "Settings"
+  entityId   String
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}

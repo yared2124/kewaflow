@@ -11,16 +11,83 @@ services:
       - NODE_ENV=development
       - PORT=3000
       - WATCHPACK_POLLING=true
+      - DATABASE_URL=postgresql://kewaflow:kewaflow_dev_password@postgres:5432/kewaflow?schema=public
+      - REDIS_URL=redis://redis:6379
+      - S3_ENDPOINT=http://minio:9000
+      - S3_REGION=us-east-1
+      - S3_ACCESS_KEY_ID=kewaflow_minio
+      - S3_SECRET_ACCESS_KEY=kewaflow_minio_password
+      - S3_BUCKET_NAME=kewaflow-media
+      - S3_FORCE_PATH_STYLE=true
     volumes:
       # Mount host directory for hot-reloading code changes
       - .:/app
       # Named volumes to keep node_modules and .next cache strictly inside Docker
-      # and prevent ANY downloads or build files on the host machine
       - app_node_modules:/app/node_modules
       - app_next_cache:/app/.next
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: kewaflow_postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: kewaflow
+      POSTGRES_PASSWORD: kewaflow_dev_password
+      POSTGRES_DB: kewaflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kewaflow -d kewaflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: kewaflow_redis
+    restart: unless-stopped
+    # ADR-004: Redis + BullMQ with AOF persistence and noeviction policy
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+# Optional S3-compatible Object Storage for media engine (ADR-005)
+  # minio:
+  #   image: minio/minio:latest
+  #   container_name: kewaflow_minio
+  #   restart: unless-stopped
+  #   command: server /data --console-address ":9001"
+  #   ports:
+  #     - "9000:9000"
+  #     - "9001:9001"
+  #   environment:
+  #     MINIO_ROOT_USER: kewaflow_minio
+  #     MINIO_ROOT_PASSWORD: kewaflow_minio_password
+  #   volumes:
+  #     - minio_data:/data
 
 volumes:
   app_node_modules:
     name: kewaflow_node_modules
   app_next_cache:
     name: kewaflow_next_cache
+  postgres_data:
+    name: kewaflow_postgres_data
+  redis_data:
+    name: kewaflow_redis_data
+  # minio_data:
+  #   name: kewaflow_minio_data

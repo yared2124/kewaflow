@@ -147,9 +147,6 @@ export default function SecuritySettingsPage() {
             <h1 className="text-xl font-bold tracking-tight text-slate-900">
               Settings
             </h1>
-            <span className="px-2 py-0.5 text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
-              System Secure
-            </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
             Security policies, multi-factor authentication, active sessions, and access credentials.
@@ -296,11 +293,10 @@ export default function SecuritySettingsPage() {
               {sessions.map((sess) => (
                 <div
                   key={sess.id}
-                  className={`p-2.5 rounded-lg border text-xs flex items-center justify-between ${
-                    sess.isCurrent
-                      ? "bg-slate-50/80 border-slate-200"
-                      : "bg-white border-slate-100 text-slate-600"
-                  }`}
+                  className={`p-2.5 rounded-lg border text-xs flex items-center justify-between ${sess.isCurrent
+                    ? "bg-slate-50/80 border-slate-200"
+                    : "bg-white border-slate-100 text-slate-600"
+                    }`}
                 >
                   <div className="flex items-start gap-2.5">
                     <Globe className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
@@ -481,32 +477,6 @@ export default function SecuritySettingsPage() {
             </Link>
           </div>
         </div>
-      </div>
-
-      {/* Security Best Practices Banner */}
-      <div className="p-3.5 rounded-xl bg-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-teal-300 shrink-0">
-            <Lock className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-xs font-bold text-white">
-              Strict Invariant SEC-005 Active: Publishing Re-Authentication Enforced
-            </h3>
-            <p className="text-[11px] text-slate-400">
-              Every Meta dispatch, ad-spend allocation, and OAuth token modification requires active MFA biometric or passcode confirmation.
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={() => {
-            setAlertNotice("Session re-authentication challenged: Admin Yared Aregayehu verified with TOTP.");
-            setTimeout(() => setAlertNotice(null), 3500);
-          }}
-          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-500 hover:bg-teal-400 text-slate-950 shrink-0 transition-colors"
-        >
-          Test Re-auth
-        </button>
       </div>
 
       {/* MODAL 1: Manage MFA Details */}

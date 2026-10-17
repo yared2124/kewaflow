@@ -226,7 +226,8 @@ export default function BrandProfilePage() {
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-3">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
                 <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Verified Legal & Brand Identity (BRAND-001)
+                  Verified Legal & Brand Identity
+
                 </h2>
                 <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-semibold border border-emerald-100">
                   Admin Confirmed
@@ -480,7 +481,7 @@ export default function BrandProfilePage() {
               Brand Voice & Personality (BRAND-003)
             </h2>
             <p className="text-xs text-slate-600">
-              Injected into system instructions for LLM adapters (Claude 3.5 Sonnet & GPT-4o):
+              Injected into system instructions for LLM adapters
             </p>
 
             <div className="grid grid-cols-2 gap-2 text-xs">
@@ -614,7 +615,7 @@ export default function BrandProfilePage() {
 
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-3">
             <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2">
-              Default Calls-To-Action (BRAND-006)
+              Default Calls-To-Action
             </h2>
             <p className="text-xs text-slate-600">
               Pre-approved CTAs for organic social posts and inquiry capture:
