@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db/prisma";
 import { computeContentVersionHash } from "@/lib/crypto";
 import { onContentModified } from "@/lib/state-machine/transitions";
 import { safeRevalidatePath } from "./utils";
+import { executeAiGeneration } from "@/providers";
+import { BrandContext } from "@/providers/types";
 
 export async function getContentItems(filter?: {
   reviewState?: "DRAFT" | "GENERATING" | "NEEDS_REVIEW" | "APPROVED" | "REJECTED";
@@ -31,6 +33,69 @@ export async function getContentItems(filter?: {
   }
 }
 
+/**
+ * Real AI Generation Server Action
+ * Grounded strictly in PostgreSQL BrandProfile (BRD-001, BRD-002, APR-007, NFR-006)
+ */
+export async function generateContentWithAI(input: {
+  serviceName: string;
+  topic?: string;
+  platform?: "FACEBOOK" | "INSTAGRAM" | "LINKEDIN";
+  tone?: "professional" | "innovative" | "authoritative" | "conversational";
+}) {
+  try {
+    const profile = await prisma.brandProfile.findUnique({
+      where: { id: "default" },
+    });
+
+    if (!profile) {
+      return {
+        success: false,
+        error: "BRD-003: Brand profile not initialized in database. Set up brand profile first.",
+      };
+    }
+
+    const brandContext: BrandContext = {
+      brandName: profile.brandName,
+      tagline: profile.tagline,
+      verifiedServices: (profile.verifiedServices as any[]) || [],
+      verifiedFacts: (profile.verifiedFacts as any) || {},
+      voiceGuidelines: (profile.voiceGuidelines as any) || null,
+      aiMonthlyBudgetCap: Number(profile.aiMonthlyBudgetCap || 0),
+    };
+
+    const result = await executeAiGeneration({
+      brandProfile: brandContext,
+      serviceName: input.serviceName,
+      topic: input.topic,
+      platform: input.platform || "FACEBOOK",
+      tone: input.tone || "professional",
+    });
+
+    // Audit log (SEC-007)
+    await prisma.auditLog.create({
+      data: {
+        actorId: "admin_yared",
+        action: "AI_CONTENT_GENERATED",
+        entityType: "BrandProfile",
+        entityId: profile.id,
+        metadata: {
+          serviceName: input.serviceName,
+          provider: result.usage.provider,
+          model: result.usage.model,
+          costUsd: result.usage.costUsd,
+          flaggedFactsCount: result.flaggedFacts.length,
+        },
+      },
+    });
+
+    return { success: true, result };
+  } catch (error: any) {
+    console.error("AI Generation failed:", error);
+    return { success: false, error: error.message || "Failed to generate content." };
+  }
+}
+
 export async function createContentItem(payload: {
   title: string;
   caption: string;
@@ -42,6 +107,7 @@ export async function createContentItem(payload: {
   adConfig?: any;
   targetPlatform?: string;
   readyForReview?: boolean;
+  flaggedFacts?: string[];
 }) {
   try {
     const versionHash = computeContentVersionHash({
@@ -53,6 +119,8 @@ export async function createContentItem(payload: {
       scheduledTime: payload.scheduledTime,
       adConfig: payload.adConfig,
     });
+
+    const hasFlaggedFacts = Boolean(payload.flaggedFacts && payload.flaggedFacts.length > 0);
 
     const item = await prisma.contentItem.create({
       data: {
@@ -75,6 +143,8 @@ export async function createContentItem(payload: {
             disclosures: payload.disclosures,
             scheduledTime: payload.scheduledTime,
             adConfig: payload.adConfig,
+            flaggedFacts: payload.flaggedFacts || [],
+            flaggedFactsResolved: !hasFlaggedFacts, // APR-007: false if unverified facts exist
           },
         },
       },
@@ -98,6 +168,7 @@ export async function createContentItem(payload: {
           versionHash,
           title: payload.title,
           reviewState: payload.readyForReview ? "NEEDS_REVIEW" : "DRAFT",
+          flaggedFactsCount: payload.flaggedFacts?.length || 0,
         },
       },
     });

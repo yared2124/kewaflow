@@ -151,3 +151,43 @@ export async function rejectContentVersion(payload: {
     return { success: false, error: "Failed to reject content version." };
   }
 }
+
+/**
+ * APR-007: Resolve Flagged Facts
+ * Allows Admin to substantiate or acknowledge flagged facts with an audit trail
+ */
+export async function resolveFlaggedFacts(payload: {
+  contentVersionId: string;
+  resolutionNotes: string;
+}) {
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      const version = await tx.contentVersion.update({
+        where: { id: payload.contentVersionId },
+        data: {
+          flaggedFactsResolved: true,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: "admin_yared",
+          action: "RESOLVE_FLAGGED_FACTS",
+          entityType: "ContentVersion",
+          entityId: payload.contentVersionId,
+          metadata: {
+            resolutionNotes: payload.resolutionNotes,
+          },
+        },
+      });
+
+      return version;
+    });
+
+    safeRevalidatePath("/approvals");
+    return { success: true, version: updated };
+  } catch (error: any) {
+    console.error("Failed to resolve flagged facts:", error);
+    return { success: false, error: error.message || "Failed to resolve flagged facts." };
+  }
+}

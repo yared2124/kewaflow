@@ -18,7 +18,11 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { getContentItems } from "@/server/actions/content";
-import { approveContentVersion, rejectContentVersion } from "@/server/actions/approval";
+import {
+  approveContentVersion,
+  rejectContentVersion,
+  resolveFlaggedFacts,
+} from "@/server/actions/approval";
 
 interface ContentItemUI {
   id: string;
@@ -496,9 +500,39 @@ export default function ApprovalQueuePage() {
                   <p className="text-[11px] text-amber-700">
                     {reviewingItem.unverifiedClaim}
                   </p>
-                  <p className="text-[10px] text-amber-600 pt-1 font-semibold">
-                    Approval is blocked until resolved with evidence or acknowledged.
-                  </p>
+                  <div className="flex items-center justify-between pt-1">
+                    <p className="text-[10px] text-amber-600 font-semibold">
+                      Approval is blocked until resolved with evidence or acknowledged.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const note = window.prompt("Enter verification source / acknowledgement evidence (APR-007):");
+                        if (!note) return;
+                        setIsActionPending(true);
+                        try {
+                          const res = await resolveFlaggedFacts({
+                            contentVersionId: reviewingItem.versionId,
+                            resolutionNotes: note,
+                          });
+                          if (res.success) {
+                            setReviewingItem({
+                              ...reviewingItem,
+                              hasUnverifiedFacts: false,
+                            });
+                            loadItems();
+                          } else {
+                            setActionError(res.error || "Failed to resolve fact.");
+                          }
+                        } finally {
+                          setIsActionPending(false);
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] transition-colors cursor-pointer"
+                    >
+                      Verify Fact (APR-007)
+                    </button>
+                  </div>
                 </div>
               )}
 

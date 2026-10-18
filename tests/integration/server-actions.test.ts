@@ -6,11 +6,13 @@ import {
   createContentItem,
   getContentItems,
   updateContentItem,
+  generateContentWithAI,
 } from "../../src/server/actions/content";
 import {
   approveContentVersion,
   getPendingApprovals,
   rejectContentVersion,
+  resolveFlaggedFacts,
 } from "../../src/server/actions/approval";
 import { createLead, getLeads, updateLeadStage } from "../../src/server/actions/leads";
 import { getCalendarPosts, schedulePost } from "../../src/server/actions/calendar";
@@ -155,5 +157,76 @@ test("Step 2: Server Actions Layer Integration Tests", async (t) => {
     assert.ok(dashRes.stats);
     assert.ok(dashRes.stats.totalLeadsCount > 0);
     assert.ok(dashRes.recentActivity.length > 0);
+  });
+
+  await t.test("ai.actions: generate grounded content and enforce BRD-001", async () => {
+    // 1. Success with verified service
+    const aiRes = await generateContentWithAI({
+      serviceName: "Custom Systems",
+      topic: "Scalable web applications for retail banking",
+      platform: "FACEBOOK",
+      tone: "professional",
+    });
+    assert.equal(aiRes.success, true);
+    assert.ok(aiRes.result);
+    assert.ok(aiRes.result.caption.includes("Kewakibt"));
+    assert.ok(aiRes.result.isGrounded);
+    assert.ok(aiRes.result.usage);
+
+    // 2. Reject unverified service (BRD-001)
+    const invalidServiceRes = await generateContentWithAI({
+      serviceName: "Quantum Computing Hardware",
+      topic: "Sell quantum computers",
+    });
+    assert.equal(invalidServiceRes.success, false);
+    assert.match(invalidServiceRes.error || "", /BRD-001/);
+
+    // 3. APR-007: Performance claim extraction and blocking
+    const claimRes = await generateContentWithAI({
+      serviceName: "Business Process Automation",
+      topic: "Guaranteed 80% reduction in reporting hours within 24 hours",
+    });
+    assert.equal(claimRes.success, true);
+    assert.ok(claimRes.result?.flaggedFacts.length! > 0);
+
+    // 4. Create content item with flagged facts and verify approval is blocked
+    const flaggedItemRes = await createContentItem({
+      title: "Automated Report Post",
+      caption: claimRes.result!.caption,
+      mediaUrls: [claimRes.result!.suggestedImageUrl],
+      destinationPageId: "fb_page_test",
+      readyForReview: true,
+      flaggedFacts: claimRes.result!.flaggedFacts,
+    });
+    assert.equal(flaggedItemRes.success, true);
+    assert.equal(flaggedItemRes.item?.versions[0].flaggedFactsResolved, false);
+
+    // Approval must be BLOCKED per APR-007
+    const blockedApproval = await approveContentVersion({
+      contentItemId: flaggedItemRes.item!.id,
+      contentVersionId: flaggedItemRes.item!.versions[0].id,
+      confirmedExactFinal: true,
+      reviewedDiff: true,
+    });
+    assert.equal(blockedApproval.success, false);
+    assert.match(blockedApproval.error || "", /APR-007 Violation/);
+
+    // Admin resolves flagged facts
+    const resolveRes = await resolveFlaggedFacts({
+      contentVersionId: flaggedItemRes.item!.versions[0].id,
+      resolutionNotes: "Verified against internal benchmark logs Q3 2026",
+    });
+    assert.equal(resolveRes.success, true);
+    assert.equal(resolveRes.version?.flaggedFactsResolved, true);
+
+    // Now approval succeeds
+    const allowedApproval = await approveContentVersion({
+      contentItemId: flaggedItemRes.item!.id,
+      contentVersionId: flaggedItemRes.item!.versions[0].id,
+      confirmedExactFinal: true,
+      reviewedDiff: true,
+    });
+    assert.equal(allowedApproval.success, true);
+    assert.equal(allowedApproval.updatedItem?.reviewState, "APPROVED");
   });
 });

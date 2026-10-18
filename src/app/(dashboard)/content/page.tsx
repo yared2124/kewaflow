@@ -16,7 +16,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { getBrandProfile } from "@/server/actions/brand";
-import { createContentItem } from "@/server/actions/content";
+import { createContentItem, generateContentWithAI } from "@/server/actions/content";
 
 interface VerifiedService {
   id: string;
@@ -49,6 +49,13 @@ export default function ContentStudioPage() {
     "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&auto=format&fit=crop&q=80"
   );
   const [hashtags, setHashtags] = useState("#CustomSoftware #Kewakibt #Reliability");
+  const [flaggedFacts, setFlaggedFacts] = useState<string[]>([]);
+  const [generationMeta, setGenerationMeta] = useState<{
+    provider: string;
+    model: string;
+    costUsd: number;
+    groundedFactsUsed: string[];
+  } | null>(null);
 
   // Load verified services from database (BRD-001)
   useEffect(() => {
@@ -77,40 +84,43 @@ export default function ContentStudioPage() {
     loadBrand();
   }, []);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setIsGenerating(true);
     setSubmitted(false);
     setSaveSuccessMsg(null);
     setSaveError(null);
 
-    setTimeout(() => {
-      setIsGenerating(false);
-      if (topic.toLowerCase().includes("automation")) {
-        setCaption(
-          "Streamline your operations, reduce manual entry errors, and scale faster with tailor-made enterprise automation."
-        );
-        setHashtags("#ProcessAutomation #Kewakibt #Operations");
-        setPreviewImage(
-          "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=80"
-        );
-      } else if (topic.toLowerCase().includes("cloud")) {
-        setCaption(
-          "Modernize legacy infrastructure with zero downtime. Cloud architecture designed for resilience, automated disaster recovery, and cost control."
-        );
-        setHashtags("#CloudEngineering #Kewakibt #Infrastructure");
-        setPreviewImage(
-          "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&auto=format&fit=crop&q=80"
-        );
-      } else {
-        setCaption(
-          `Modernize your architecture with ${selectedService}. High-reliability systems engineered for measurable business outcomes.`
-        );
-        setHashtags("#EnterpriseSoftware #Kewakibt #CloudEngineering");
-        setPreviewImage(
-          "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&auto=format&fit=crop&q=80"
-        );
+    try {
+      const res = await generateContentWithAI({
+        serviceName: selectedService,
+        topic,
+        platform: "FACEBOOK",
+        tone: "professional",
+      });
+
+      if (!res.success || !res.result) {
+        setSaveError(res.error || "Failed to generate grounded content.");
+        return;
       }
-    }, 700);
+
+      const { result } = res;
+      setCaption(result.caption);
+      setHashtags(result.hashtags);
+      if (result.suggestedImageUrl) {
+        setPreviewImage(result.suggestedImageUrl);
+      }
+      setFlaggedFacts(result.flaggedFacts || []);
+      setGenerationMeta({
+        provider: result.usage.provider,
+        model: result.usage.model,
+        costUsd: result.usage.costUsd,
+        groundedFactsUsed: result.groundedFactsUsed || [],
+      });
+    } catch (err: any) {
+      setSaveError(err.message || "An unexpected error occurred during generation.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleSaveDraft = async () => {
@@ -126,6 +136,7 @@ export default function ContentStudioPage() {
         mediaUrls: [previewImage],
         destinationPageId: "fb_page_kewakibt_main",
         readyForReview: false,
+        flaggedFacts,
       });
 
       if (!res.success) {
@@ -154,6 +165,7 @@ export default function ContentStudioPage() {
         mediaUrls: [previewImage],
         destinationPageId: "fb_page_kewakibt_main",
         readyForReview: true,
+        flaggedFacts,
       });
 
       if (!res.success) {
@@ -329,6 +341,38 @@ export default function ContentStudioPage() {
                 Facebook Page Post Simulation
               </span>
             </div>
+
+            {/* Provider & Grounding Metadata */}
+            {generationMeta && (
+              <div className="flex items-center justify-between p-2 rounded-lg bg-teal-50/70 border border-teal-100 text-[10px] text-teal-800">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <ShieldCheck className="w-3.5 h-3.5 text-kewa-teal" />
+                  <span>Provider: <strong>{generationMeta.provider}</strong> ({generationMeta.model})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-emerald-700 font-bold">${generationMeta.costUsd.toFixed(4)} USD</span>
+                  <span className="px-1.5 py-0.5 rounded bg-teal-100 font-semibold">100% Grounded</span>
+                </div>
+              </div>
+            )}
+
+            {/* APR-007 Flagged Facts Warning Banner */}
+            {flaggedFacts.length > 0 && (
+              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-amber-800 text-[11px]">
+                  <span>⚠️</span>
+                  <span>APR-007: Facts Requiring Admin Verification ({flaggedFacts.length})</span>
+                </div>
+                <ul className="list-disc pl-4 space-y-0.5 text-[11px] text-amber-800">
+                  {flaggedFacts.map((fact, idx) => (
+                    <li key={idx}>{fact}</li>
+                  ))}
+                </ul>
+                <p className="text-[10px] text-amber-700 italic pt-0.5">
+                  Approval will be blocked in the Approval Queue until each fact is verified with evidence or acknowledged.
+                </p>
+              </div>
+            )}
 
             {/* Simulated Facebook Post Card */}
             <div className="max-w-md mx-auto bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs space-y-3">
