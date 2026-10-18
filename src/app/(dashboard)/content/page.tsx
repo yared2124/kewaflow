@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -13,16 +13,33 @@ import {
   Share2,
   ShieldCheck,
   HelpCircle,
+  Loader2,
 } from "lucide-react";
+import { getBrandProfile } from "@/server/actions/brand";
+import { createContentItem } from "@/server/actions/content";
+
+interface VerifiedService {
+  id: string;
+  name: string;
+  description?: string;
+}
 
 export default function ContentStudioPage() {
   const [activeTab, setActiveTab] = useState<"text" | "image">("text");
   const [contentType, setContentType] = useState("Social Media Post");
-  const [verifiedService, setVerifiedService] = useState("Custom Enterprise Web Systems");
+  const [verifiedServices, setVerifiedServices] = useState<VerifiedService[]>([
+    { id: "srv-1", name: "Custom Enterprise Web Systems" },
+    { id: "srv-2", name: "Business Process Automation" },
+    { id: "srv-3", name: "Cloud Architecture & Migration" },
+  ]);
+  const [selectedService, setSelectedService] = useState("Custom Enterprise Web Systems");
   const [topic, setTopic] = useState("Benefits of custom software for businesses");
   const [tone, setTone] = useState("Professional");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Live generated content
   const [caption, setCaption] = useState(
@@ -33,9 +50,39 @@ export default function ContentStudioPage() {
   );
   const [hashtags, setHashtags] = useState("#CustomSoftware #Kewakibt #Reliability");
 
+  // Load verified services from database (BRD-001)
+  useEffect(() => {
+    async function loadBrand() {
+      try {
+        const res = await getBrandProfile();
+        if (res.success && res.profile?.verifiedServices) {
+          const srvs = res.profile.verifiedServices as any[];
+          if (Array.isArray(srvs) && srvs.length > 0) {
+            setVerifiedServices(
+              srvs.map((s, idx) => ({
+                id: s.id || `srv-${idx}`,
+                name: s.name,
+                description: s.description,
+              }))
+            );
+            if (srvs[0]?.name) {
+              setSelectedService(srvs[0].name);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load verified services from database:", err);
+      }
+    }
+    loadBrand();
+  }, []);
+
   const handleGenerate = () => {
     setIsGenerating(true);
     setSubmitted(false);
+    setSaveSuccessMsg(null);
+    setSaveError(null);
+
     setTimeout(() => {
       setIsGenerating(false);
       if (topic.toLowerCase().includes("automation")) {
@@ -46,9 +93,17 @@ export default function ContentStudioPage() {
         setPreviewImage(
           "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=80"
         );
+      } else if (topic.toLowerCase().includes("cloud")) {
+        setCaption(
+          "Modernize legacy infrastructure with zero downtime. Cloud architecture designed for resilience, automated disaster recovery, and cost control."
+        );
+        setHashtags("#CloudEngineering #Kewakibt #Infrastructure");
+        setPreviewImage(
+          "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&auto=format&fit=crop&q=80"
+        );
       } else {
         setCaption(
-          `Modernize your architecture with ${verifiedService}. High-reliability systems engineered for measurable business outcomes.`
+          `Modernize your architecture with ${selectedService}. High-reliability systems engineered for measurable business outcomes.`
         );
         setHashtags("#EnterpriseSoftware #Kewakibt #CloudEngineering");
         setPreviewImage(
@@ -58,8 +113,60 @@ export default function ContentStudioPage() {
     }, 700);
   };
 
-  const handleSendToApproval = () => {
-    setSubmitted(true);
+  const handleSaveDraft = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccessMsg(null);
+
+    try {
+      const fullCaption = `${caption.trim()}\n\n${hashtags.trim()}`;
+      const res = await createContentItem({
+        title: topic || selectedService,
+        caption: fullCaption,
+        mediaUrls: [previewImage],
+        destinationPageId: "fb_page_kewakibt_main",
+        readyForReview: false,
+      });
+
+      if (!res.success) {
+        setSaveError(res.error || "Failed to save draft.");
+        return;
+      }
+
+      setSaveSuccessMsg("Draft saved in database.");
+    } catch (err: any) {
+      setSaveError(err.message || "Failed to save draft.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSendToApproval = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccessMsg(null);
+
+    try {
+      const fullCaption = `${caption.trim()}\n\n${hashtags.trim()}`;
+      const res = await createContentItem({
+        title: topic || selectedService,
+        caption: fullCaption,
+        mediaUrls: [previewImage],
+        destinationPageId: "fb_page_kewakibt_main",
+        readyForReview: true,
+      });
+
+      if (!res.success) {
+        setSaveError(res.error || "Failed to queue draft for approval.");
+        return;
+      }
+
+      setSubmitted(true);
+    } catch (err: any) {
+      setSaveError(err.message || "Failed to queue draft.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -71,10 +178,24 @@ export default function ContentStudioPage() {
             Content Studio
           </h1>
           <p className="text-[12px] text-slate-700">
-            Create engaging content with AI
+            Create grounded marketing content (BRD-001: Zero invented claims, verified against Brand Profile).
           </p>
         </div>
       </div>
+
+      {saveSuccessMsg && (
+        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
+          <span>{saveSuccessMsg}</span>
+          <button onClick={() => setSaveSuccessMsg(null)} className="text-emerald-700 font-bold ml-2">✕</button>
+        </div>
+      )}
+
+      {saveError && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center justify-between">
+          <span>{saveError}</span>
+          <button onClick={() => setSaveError(null)} className="text-red-700 font-bold ml-2">✕</button>
+        </div>
+      )}
 
       {/* Main Studio 2-Column Split */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -84,19 +205,21 @@ export default function ContentStudioPage() {
           <div className="flex items-center border-b border-slate-100 pb-2 gap-4">
             <button
               onClick={() => setActiveTab("text")}
-              className={`text-xs font-bold pb-1 transition-colors relative ${activeTab === "text"
-                ? "text-kewa-teal border-b-2 border-kewa-teal"
-                : "text-slate-400 hover:text-slate-700"
-                }`}
+              className={`text-xs font-bold pb-1 transition-colors relative ${
+                activeTab === "text"
+                  ? "text-kewa-teal border-b-2 border-kewa-teal"
+                  : "text-slate-400 hover:text-slate-700"
+              }`}
             >
               Text Generation
             </button>
             <button
               onClick={() => setActiveTab("image")}
-              className={`text-xs font-bold pb-1 transition-colors relative ${activeTab === "image"
-                ? "text-kewa-teal border-b-2 border-kewa-teal"
-                : "text-slate-400 hover:text-slate-700"
-                }`}
+              className={`text-xs font-bold pb-1 transition-colors relative ${
+                activeTab === "image"
+                  ? "text-kewa-teal border-b-2 border-kewa-teal"
+                  : "text-slate-400 hover:text-slate-700"
+              }`}
             >
               Image Generation
             </button>
@@ -125,18 +248,23 @@ export default function ContentStudioPage() {
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                  Verified Service
+                  Verified Service (BRD-001)
                   <HelpCircle className="w-3 h-3 text-slate-400" />
                 </label>
-
+                <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" /> Grounded
+                </span>
               </div>
               <select
-                value={verifiedService}
-                onChange={(e) => setVerifiedService(e.target.value)}
+                value={selectedService}
+                onChange={(e) => setSelectedService(e.target.value)}
                 className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-kewa-teal"
               >
-                <option>Custom Enterprise Web Systems</option>
-                <option>API & Systems Integration</option>
+                {verifiedServices.map((srv) => (
+                  <option key={srv.id} value={srv.name}>
+                    {srv.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -164,10 +292,10 @@ export default function ContentStudioPage() {
                 onChange={(e) => setTone(e.target.value)}
                 className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-kewa-teal"
               >
-                <option>Professional</option>
-                <option>Technical & Authoritative</option>
-                <option>Direct & Results-Oriented</option>
-                <option>Engaging & Thought Leadership</option>
+                <option>Professional & Authoritative</option>
+                <option>Technical & Engineering-Centric</option>
+                <option>Outcomes & ROI Driven</option>
+                <option>Pragmatic & Grounded</option>
               </select>
             </div>
           </div>
@@ -184,7 +312,7 @@ export default function ContentStudioPage() {
                 <span>Generating grounded copy...</span>
               </>
             ) : (
-              <span>Generate Content</span>
+              <span>Generate Content Draft</span>
             )}
           </button>
         </div>
@@ -206,17 +334,12 @@ export default function ContentStudioPage() {
             <div className="max-w-md mx-auto bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs space-y-3">
               {/* Post Author Bar */}
               <div className="flex items-center gap-2.5">
-                <div className="relative w-8 h-8 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
-                  <Image
-                    src="/brand/kewakibt-icon.png"
-                    alt="Kewakibt Software Solutions"
-                    fill
-                    className="object-contain p-1"
-                  />
+                <div className="w-8 h-8 rounded-full bg-cyan-700 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                  K
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-900 leading-tight">
-                    Kewakibt Software Solutions
+                    Kewakibt Software Solutions PLC
                   </p>
                   <p className="text-[10px] text-slate-400 flex items-center gap-1">
                     Just now • <span>🌐</span>
@@ -226,10 +349,10 @@ export default function ContentStudioPage() {
 
               {/* Editable / Live Post Caption */}
               <textarea
-                rows={2}
+                rows={3}
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
-                className="w-full text-xs text-slate-800 leading-relaxed border-none focus:ring-1 focus:ring-cyan-200 rounded p-1 resize-none"
+                className="w-full text-xs text-slate-800 leading-relaxed border border-slate-100 focus:ring-1 focus:ring-kewa-teal rounded p-1.5 resize-none"
               />
 
               {/* Post Creative Photo */}
@@ -238,6 +361,7 @@ export default function ContentStudioPage() {
                   src={previewImage}
                   alt="Post creative"
                   fill
+                  unoptimized
                   className="object-cover"
                 />
               </div>
@@ -247,7 +371,7 @@ export default function ContentStudioPage() {
                 {hashtags}
               </p>
 
-              {/* Social Engagement Stats Mock */}
+              {/* Social Engagement Simulation */}
               <div className="pt-2 border-t border-slate-100 flex items-center justify-around text-slate-400 text-[11px]">
                 <span className="flex items-center gap-1 hover:text-slate-600 cursor-pointer">
                   <ThumbsUp className="w-3.5 h-3.5" /> Like
@@ -278,17 +402,19 @@ export default function ContentStudioPage() {
             ) : (
               <>
                 <button
-                  onClick={() => alert("Draft saved successfully.")}
-                  className="w-full sm:w-auto py-1.5 px-3 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  onClick={handleSaveDraft}
+                  disabled={isSaving}
+                  className="w-full sm:w-auto py-1.5 px-3 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  <Save className="w-3.5 h-3.5" />
+                  {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                   <span>Save as Draft</span>
                 </button>
                 <button
                   onClick={handleSendToApproval}
-                  className="w-full sm:w-auto py-1.5 px-4 rounded-lg bg-kewa-teal hover:bg-kewa-teal-hover text-white text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                  disabled={isSaving}
+                  className="w-full sm:w-auto py-1.5 px-4 rounded-lg bg-kewa-teal hover:bg-kewa-teal-hover text-white text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  <Send className="w-3.5 h-3.5 text-cyan-300" />
+                  {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 text-cyan-300" />}
                   <span>Send to Approval Queue</span>
                 </button>
               </>

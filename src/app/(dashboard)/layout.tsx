@@ -18,7 +18,7 @@ import {
   ChevronDown,
   LogOut,
 } from "lucide-react";
-import { MOCK_ADMIN_USER, MOCK_CONNECTED_PAGE } from "@/lib/mock-data";
+import { getBrandProfile } from "@/server/actions/brand";
 
 export default function DashboardLayout({
   children,
@@ -28,7 +28,29 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [connectedPageName, setConnectedPageName] = useState("Kewakibt Software Solutions");
   const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  const adminUser = {
+    name: "Yared Aregayehu",
+    role: "Admin",
+    email: "contact@kewakibt.com",
+    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+  };
+
+  useEffect(() => {
+    async function loadBrand() {
+      try {
+        const res = await getBrandProfile();
+        if (res.success && res.profile?.brandName) {
+          setConnectedPageName(res.profile.brandName);
+        }
+      } catch (err) {
+        console.error("Failed to load brand in layout:", err);
+      }
+    }
+    loadBrand();
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -157,7 +179,7 @@ export default function DashboardLayout({
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="text-xs font-bold text-slate-800 leading-none">
-                    {MOCK_CONNECTED_PAGE.name}
+                    {connectedPageName}
                   </span>
                   <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-600 leading-none">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -184,18 +206,18 @@ export default function DashboardLayout({
               >
                 <div className="relative w-8 h-8 rounded-full overflow-hidden border border-slate-200 group-hover:border-slate-300 transition-colors shrink-0">
                   <Image
-                    src={MOCK_ADMIN_USER.avatarUrl}
-                    alt={MOCK_ADMIN_USER.name}
+                    src={adminUser.avatarUrl}
+                    alt={adminUser.name}
                     fill
                     className="object-cover"
                   />
                 </div>
                 <div className="text-left hidden sm:block">
                   <p className="text-xs font-bold text-slate-900 leading-tight group-hover:text-kewa-teal transition-colors">
-                    {MOCK_ADMIN_USER.name}
+                    {adminUser.name}
                   </p>
                   <p className="text-[10px] text-slate-500">
-                    {MOCK_ADMIN_USER.role}
+                    {adminUser.role}
                   </p>
                 </div>
                 <ChevronDown
@@ -217,8 +239,8 @@ export default function DashboardLayout({
                       <div className="flex items-center gap-2.5">
                         <div className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-200 shrink-0">
                           <Image
-                            src={MOCK_ADMIN_USER.avatarUrl}
-                            alt={MOCK_ADMIN_USER.name}
+                            src={adminUser.avatarUrl}
+                            alt={adminUser.name}
                             fill
                             className="object-cover"
                           />
@@ -226,14 +248,14 @@ export default function DashboardLayout({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-1">
                             <p className="text-xs font-bold text-slate-900 truncate leading-tight">
-                              {MOCK_ADMIN_USER.name}
+                              {adminUser.name}
                             </p>
                             <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                              {MOCK_ADMIN_USER.role}
+                              {adminUser.role}
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                            {MOCK_ADMIN_USER.email}
+                            {adminUser.email}
                           </p>
                         </div>
                       </div>

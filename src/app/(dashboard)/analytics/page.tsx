@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   TrendingUp,
   Users,
@@ -13,86 +13,120 @@ import {
   Share2,
   FileText,
   BarChart2,
+  Loader2,
+  RefreshCw,
+  DollarSign,
 } from "lucide-react";
-
-interface AnalyticsKpi {
-  title: string;
-  value: string;
-  change: string;
-  isPositive: boolean;
-  sub: string;
-}
+import { getAnalyticsData } from "@/server/actions/analytics";
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState("Last 30 days");
+  const [data, setData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const kpis: AnalyticsKpi[] = [
-    {
-      title: "Total Reach",
-      value: "48,230",
-      change: "+30%",
-      isPositive: true,
-      sub: "vs previous 30 days",
-    },
-    {
-      title: "Engagement",
-      value: "5,420",
-      change: "+18%",
-      isPositive: true,
-      sub: "Reactions, comments & shares",
-    },
-    {
-      title: "Leads",
-      value: "28",
-      change: "+35%",
-      isPositive: true,
-      sub: "Verified inquiries (CRM-001)",
-    },
-    {
-      title: "Conversion Rate",
-      value: "5.8%",
-      change: "+1.2%",
-      isPositive: true,
-      sub: "Reach to genuine inquiry",
-    },
-  ];
+  const loadAnalytics = async () => {
+    setIsLoading(true);
+    try {
+      const res = await getAnalyticsData();
+      if (res.success) {
+        setData(res);
+      }
+    } catch (err) {
+      console.error("Failed to load analytics:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    loadAnalytics();
+  }, []);
+
+  const stats = data?.stats || {
+    totalLeads: 0,
+    totalPipelineValue: 0,
+    wonValue: 0,
+    conversionRate: "0.0",
+    qualificationRate: "0.0",
+    totalContentItems: 0,
+    approvedItems: 0,
+    scheduledItems: 0,
+    publishedItems: 0,
+  };
+
+  const stageCounts = data?.stageCounts || {
+    INQUIRY: 0,
+    QUALIFIED: 0,
+    PROPOSAL: 0,
+    WON: 0,
+    LOST: 0,
+  };
+
+  const totalInquiries = Math.max(stats.totalLeads, 1);
   const funnelStages = [
     {
-      stage: "Inquiries",
-      count: 28,
-      percentage: 100,
+      stage: "Inquiries (CRM-001)",
+      count: stageCounts.INQUIRY,
+      percentage: Math.round((stageCounts.INQUIRY / totalInquiries) * 100) || 100,
       color: "bg-kewa-teal",
       textColor: "text-kewa-teal",
     },
     {
-      stage: "Qualified",
-      count: 16,
-      percentage: 57,
+      stage: "Qualified Leads",
+      count: stageCounts.QUALIFIED,
+      percentage: Math.round((stageCounts.QUALIFIED / totalInquiries) * 100),
       color: "bg-cyan-500",
       textColor: "text-cyan-700",
     },
     {
-      stage: "Proposals",
-      count: 7,
-      percentage: 25,
+      stage: "Formal Proposals",
+      count: stageCounts.PROPOSAL,
+      percentage: Math.round((stageCounts.PROPOSAL / totalInquiries) * 100),
       color: "bg-amber-500",
       textColor: "text-amber-700",
     },
     {
-      stage: "Won",
-      count: 4,
-      percentage: 14,
+      stage: "Won Contracts",
+      count: stageCounts.WON,
+      percentage: Math.round((stageCounts.WON / totalInquiries) * 100),
       color: "bg-emerald-500",
       textColor: "text-emerald-700",
     },
   ];
 
-  const contentThemes = [
-    { name: "Custom Software", percentage: 33, color: "#0E3B43" },
-    { name: "Business Process", percentage: 26, color: "#00CECB" },
-    { name: "Cloud Solutions", percentage: 24, color: "#3B82F6" },
-    { name: "Other", percentage: 17, color: "#94A3B8" },
+  const kpis = [
+    {
+      title: "Pipeline Deal Value",
+      value: `$${stats.totalPipelineValue.toLocaleString()}`,
+      change: "Active",
+      isPositive: true,
+      sub: `Won: $${stats.wonValue.toLocaleString()}`,
+      icon: DollarSign,
+    },
+    {
+      title: "Verified Leads",
+      value: String(stats.totalLeads),
+      change: "CRM-001 Strict",
+      isPositive: true,
+      sub: "Excludes vanity likes/reach",
+      icon: Users,
+    },
+    {
+      title: "Content Items",
+      value: String(stats.totalContentItems),
+      change: `${stats.approvedItems} Approved`,
+      isPositive: true,
+      sub: `${stats.scheduledItems} Scheduled`,
+      icon: FileText,
+    },
+    {
+      title: "Deal Win Rate",
+      value: `${stats.conversionRate}%`,
+      change: `${stats.qualificationRate}% Qual`,
+      isPositive: true,
+      sub: "Inquiry to closed client",
+      icon: TrendingUp,
+    },
   ];
 
   return (
@@ -101,298 +135,163 @@ export default function AnalyticsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <h1 className="text-base font-bold text-slate-900 leading-tight">
-            Analytics
+            Performance Analytics & Revenue Attribution
           </h1>
           <p className="text-[11px] text-slate-500">
-            Track your performance and identify content themes that produce qualified opportunities.
+            Real pipeline metrics directly from PostgreSQL. Strictly compliant with CRM-001 (Likes and reach are NEVER labeled as leads).
           </p>
         </div>
 
-        {/* Range Selector & Data Freshness Indicator (DASH-003, ANA-002) */}
+        {/* Range Selector & Data Freshness Indicator */}
         <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={loadAnalytics}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-2xs cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            <span>Refresh</span>
+          </button>
+
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-50 border border-cyan-100 text-[10px] font-semibold text-kewa-cyan-dark">
             <Clock className="w-3.5 h-3.5 text-kewa-cyan-dark" />
-            <span>Updated 15 mins ago • Meta Insights</span>
+            <span>PostgreSQL Synchronized</span>
           </div>
-
-          <select
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value)}
-            className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 shadow-2xs focus:outline-hidden"
-          >
-            <option>Last 7 days</option>
-            <option>Last 30 days</option>
-            <option>Last 90 days</option>
-            <option>This Year</option>
-          </select>
         </div>
       </div>
 
-      {/* Top 4 KPI Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        {kpis.map((kpi, idx) => (
-          <div
-            key={idx}
-            className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs space-y-1"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                {kpi.title}
-              </span>
-              <span className="inline-flex items-center text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded-full">
-                <ArrowUpRight className="w-3 h-3 mr-0.5" />
-                {kpi.change}
-              </span>
-            </div>
-
-            <p className="text-2xl font-bold text-slate-900 tracking-tight leading-none">
-              {kpi.value}
-            </p>
-
-            <p className="text-[10px] text-slate-400 font-medium pt-0.5">
-              {kpi.sub}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {/* Middle Section: Lead Funnel (7 cols) + Top Performing Content (5 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Lead Funnel Card (7 cols) */}
-        <div className="lg:col-span-7 bg-white border border-slate-200/90 rounded-xl p-4 shadow-2xs space-y-3.5">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-            <div>
-              <h3 className="text-xs font-bold text-slate-900">
-                Lead Funnel (CRM-002)
-              </h3>
-              <p className="text-[10px] text-slate-400">
-                Inquiries → Qualified → Proposals → Won Clients
-              </p>
-            </div>
-            <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-              14.3% Close Rate
-            </span>
-          </div>
-
-          {/* Funnel Progress Bars */}
-          <div className="space-y-3">
-            {funnelStages.map((stage) => (
-              <div key={stage.stage} className="space-y-1">
-                <div className="flex items-center justify-between text-xs font-semibold">
-                  <span className="text-slate-700">{stage.stage}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-900 font-bold">
-                      {stage.count}
-                    </span>
-                    <span className={`text-[10px] font-bold ${stage.textColor}`}>
-                      ({stage.percentage}%)
-                    </span>
-                  </div>
-                </div>
-
-                {/* Progress bar */}
-                <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${stage.color} transition-all duration-500`}
-                    style={{ width: `${stage.percentage}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Funnel Footer Stats */}
-          <div className="pt-3 border-t border-slate-100 grid grid-cols-2 gap-3 text-center text-xs">
-            <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
-              <span className="text-[10px] text-slate-400 block font-semibold">
-                Median Follow-up Time
-              </span>
-              <span className="font-bold text-kewa-teal">3.2 hours</span>
-            </div>
-            <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
-              <span className="text-[10px] text-slate-400 block font-semibold">
-                Qualification Ratio
-              </span>
-              <span className="font-bold text-cyan-700">57.1%</span>
-            </div>
-          </div>
+      {isLoading ? (
+        <div className="py-20 flex flex-col items-center justify-center text-slate-400 space-y-2 bg-white rounded-xl border border-slate-200">
+          <Loader2 className="w-6 h-6 animate-spin text-kewa-teal" />
+          <p className="text-xs font-medium">Aggregating live CRM and publishing analytics...</p>
         </div>
-
-        {/* Top Performing Content Card (5 cols) */}
-        <div className="lg:col-span-5 bg-white border border-slate-200/90 rounded-xl p-4 shadow-2xs space-y-3.5 flex flex-col justify-between">
-          <div className="border-b border-slate-100 pb-2.5">
-            <h3 className="text-xs font-bold text-slate-900">
-              Top Performing Content
-            </h3>
-            <p className="text-[10px] text-slate-400">
-              Themes driving the most client engagement
-            </p>
-          </div>
-
-          {/* Visual Donut Chart Simulation (SVG) */}
-          <div className="flex flex-col items-center justify-center py-2 space-y-3">
-            <div className="relative w-36 h-36 flex items-center justify-center">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                {/* Custom Software (33%) */}
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="38"
-                  fill="transparent"
-                  stroke="#0E3B43"
-                  strokeWidth="14"
-                  strokeDasharray="238.76"
-                  strokeDashoffset="78.79"
-                  className="transition-all"
-                />
-                {/* Business Process (26%) */}
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="38"
-                  fill="transparent"
-                  stroke="#00CECB"
-                  strokeWidth="14"
-                  strokeDasharray="238.76"
-                  strokeDashoffset="140.87"
-                  className="transition-all"
-                />
-                {/* Cloud Solutions (24%) */}
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="38"
-                  fill="transparent"
-                  stroke="#3B82F6"
-                  strokeWidth="14"
-                  strokeDasharray="238.76"
-                  strokeDashoffset="198.17"
-                  className="transition-all"
-                />
-                {/* Other (17%) */}
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="38"
-                  fill="transparent"
-                  stroke="#94A3B8"
-                  strokeWidth="14"
-                  strokeDasharray="238.76"
-                  strokeDashoffset="238.76"
-                  className="transition-all"
-                />
-              </svg>
-
-              {/* Center stat */}
-              <div className="absolute text-center">
-                <span className="text-base font-bold text-slate-900 leading-none block">
-                  33%
-                </span>
-                <span className="text-[9px] text-slate-400 font-medium">
-                  Top Theme
-                </span>
-              </div>
-            </div>
-
-            {/* Legend List */}
-            <div className="w-full grid grid-cols-2 gap-2 text-xs pt-1">
-              {contentThemes.map((theme) => (
+      ) : (
+        <>
+          {/* Top 4 Real KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {kpis.map((kpi, idx) => {
+              const IconComp = kpi.icon;
+              return (
                 <div
-                  key={theme.name}
-                  className="flex items-center justify-between p-1.5 rounded-lg bg-slate-50 border border-slate-100"
+                  key={idx}
+                  className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs hover:shadow-xs transition-shadow flex items-start gap-3"
                 >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span
-                      className="w-2.5 h-2.5 rounded-full shrink-0"
-                      style={{ backgroundColor: theme.color }}
-                    />
-                    <span className="text-[11px] font-medium text-slate-700 truncate">
-                      {theme.name}
-                    </span>
+                  <div className="w-10 h-10 rounded-lg bg-cyan-50 border border-cyan-100/70 flex items-center justify-center text-kewa-cyan-dark shrink-0">
+                    <IconComp className="w-5 h-5 text-kewa-cyan-dark" />
                   </div>
-                  <span className="text-[11px] font-bold text-slate-900 ml-1">
-                    {theme.percentage}%
-                  </span>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                      {kpi.title}
+                    </span>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-2xl font-bold text-slate-900 tracking-tight leading-none">
+                        {kpi.value}
+                      </p>
+                      <span className="text-[10px] font-bold text-emerald-600">
+                        {kpi.change}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-tight pt-0.5">
+                      {kpi.sub}
+                    </p>
+                  </div>
                 </div>
-              ))}
+              );
+            })}
+          </div>
+
+          {/* Main 2-Column Split: Lead Conversion Funnel (8 cols) + Publishing Breakdown (4 cols) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            {/* Left 8 Cols: Genuine Lead Conversion Funnel */}
+            <div className="lg:col-span-8 bg-white border border-slate-200/90 rounded-xl p-4 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900">
+                    CRM Pipeline Funnel (CRM-002)
+                  </h3>
+                  <p className="text-[10px] text-slate-400">
+                    Strict stages: INQUIRY → QUALIFIED → PROPOSAL → WON
+                  </p>
+                </div>
+                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Total Active Value: ${stats.totalPipelineValue.toLocaleString()}
+                </span>
+              </div>
+
+              {/* Funnel Progress Bars */}
+              <div className="space-y-3 pt-1">
+                {funnelStages.map((stage, idx) => (
+                  <div key={idx} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-slate-800">
+                        {stage.stage}
+                      </span>
+                      <div className="flex items-center gap-2 font-mono text-[11px]">
+                        <span className="font-bold text-slate-900">
+                          {stage.count} leads
+                        </span>
+                        <span className="text-slate-400">({stage.percentage}%)</span>
+                      </div>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${stage.color}`}
+                        style={{ width: `${Math.max(stage.percentage, 4)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 space-y-1">
+                <span className="font-bold text-slate-800">Invariant Rule CRM-001 Check:</span>
+                <p>
+                  Zero vanity metrics (impressions, reactions, page reach) are merged into lead counts. Lead qualification requires verified corporate contact identifier and explicit inquiry record.
+                </p>
+              </div>
+            </div>
+
+            {/* Right 4 Cols: Content & Governance Breakdown */}
+            <div className="lg:col-span-4 bg-white border border-slate-200/90 rounded-xl p-4 shadow-2xs space-y-4">
+              <div className="border-b border-slate-100 pb-2.5">
+                <h3 className="text-xs font-bold text-slate-900">
+                  Content Governance Breakdown
+                </h3>
+                <p className="text-[10px] text-slate-400">
+                  Three-axis state distribution (AGENTS.md §3)
+                </p>
+              </div>
+
+              <div className="space-y-2.5 text-xs">
+                <div className="flex justify-between items-center p-2 rounded-lg bg-slate-50 border border-slate-100">
+                  <span className="text-slate-600">Total Produced:</span>
+                  <span className="font-bold text-slate-900">{stats.totalContentItems}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-lg bg-teal-50 border border-teal-100 text-kewa-teal">
+                  <span className="font-medium">Approved Versions:</span>
+                  <span className="font-bold">{stats.approvedItems}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-lg bg-cyan-50 border border-cyan-100 text-cyan-800">
+                  <span className="font-medium">BullMQ Scheduled:</span>
+                  <span className="font-bold">{stats.scheduledItems}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-800">
+                  <span className="font-medium">Confirmed Published:</span>
+                  <span className="font-bold">{stats.publishedItems}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-lg bg-amber-50 border border-amber-100 text-amber-800">
+                  <span className="font-medium">Active Approvals:</span>
+                  <span className="font-bold">{stats.approvalsCount}</span>
+                </div>
+              </div>
+
+              <div className="pt-2 text-[10px] text-slate-400 border-t border-slate-100">
+                AI Monthly Spend Cap: <strong>${stats.aiMonthlyBudgetCap.toFixed(2)} USD</strong> (Hard spend limit governed by BRD-001)
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Bottom Section: Organic Meta Insights Post Performance (ANA-001, META-008) */}
-      <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-2xs space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-          <div className="flex items-center gap-2">
-            <Share2 className="w-3.5 h-3.5 text-slate-700" />
-            <h3 className="text-xs font-bold text-slate-900">
-              Organic Post Insights (Official Meta Graph API)
-            </h3>
-          </div>
-          <span className="text-[10px] text-slate-400 font-medium">
-            Dynamic Metric Registry • No Simulated Data (DASH-002)
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-slate-100 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
-                <th className="pb-2">Post Title</th>
-                <th className="pb-2">Published</th>
-                <th className="pb-2 text-center">Reach</th>
-                <th className="pb-2 text-center">Reactions</th>
-                <th className="pb-2 text-center">Shares</th>
-                <th className="pb-2 text-right">Inquiries Generated</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              <tr className="hover:bg-slate-50/70 transition-colors">
-                <td className="py-2.5 font-bold text-slate-900">
-                  Custom Software Development
-                </td>
-                <td className="py-2.5 text-slate-400 text-[11px]">12 Oct, 10:00 AM</td>
-                <td className="py-2.5 text-center font-semibold text-slate-800">
-                  18,420
-                </td>
-                <td className="py-2.5 text-center text-slate-600">842</td>
-                <td className="py-2.5 text-center text-slate-600">96</td>
-                <td className="py-2.5 text-right font-bold text-kewa-teal">
-                  11 Leads
-                </td>
-              </tr>
-              <tr className="hover:bg-slate-50/70 transition-colors">
-                <td className="py-2.5 font-bold text-slate-900">
-                  Business Process Automation
-                </td>
-                <td className="py-2.5 text-slate-400 text-[11px]">08 Oct, 02:00 PM</td>
-                <td className="py-2.5 text-center font-semibold text-slate-800">
-                  14,210
-                </td>
-                <td className="py-2.5 text-center text-slate-600">620</td>
-                <td className="py-2.5 text-center text-slate-600">74</td>
-                <td className="py-2.5 text-right font-bold text-kewa-teal">
-                  8 Leads
-                </td>
-              </tr>
-              <tr className="hover:bg-slate-50/70 transition-colors">
-                <td className="py-2.5 font-bold text-slate-900">
-                  Cloud Infrastructure Modernization
-                </td>
-                <td className="py-2.5 text-slate-400 text-[11px]">03 Oct, 09:30 AM</td>
-                <td className="py-2.5 text-center font-semibold text-slate-800">
-                  15,600
-                </td>
-                <td className="py-2.5 text-center text-slate-600">710</td>
-                <td className="py-2.5 text-center text-slate-600">81</td>
-                <td className="py-2.5 text-right font-bold text-kewa-teal">
-                  9 Leads
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 export async function getDashboardData() {
   try {
     const [
+      draftsCount,
       totalLeadsCount,
       pendingApprovalsCount,
       scheduledPostsCount,
@@ -13,7 +14,9 @@ export async function getDashboardData() {
       recentLeads,
       recentActivity,
       allLeads,
+      scheduledItems,
     ] = await Promise.all([
+      prisma.contentItem.count({ where: { reviewState: "DRAFT" } }),
       prisma.lead.count(),
       prisma.contentItem.count({ where: { reviewState: "NEEDS_REVIEW" } }),
       prisma.contentItem.count({ where: { jobState: "SCHEDULED" } }),
@@ -35,6 +38,12 @@ export async function getDashboardData() {
       prisma.lead.findMany({
         select: { dealValueUsd: true, stage: true },
       }),
+      prisma.contentItem.findMany({
+        where: { jobState: "SCHEDULED" },
+        include: { currentVersion: true },
+        take: 5,
+        orderBy: { scheduledAt: "asc" },
+      }),
     ]);
 
     // Calculate pipeline value
@@ -45,6 +54,7 @@ export async function getDashboardData() {
     return {
       success: true,
       stats: {
+        draftsCount,
         totalLeadsCount,
         pendingApprovalsCount,
         scheduledPostsCount,
@@ -54,9 +64,11 @@ export async function getDashboardData() {
       recentApprovals,
       recentLeads,
       recentActivity,
+      scheduledItems,
     };
   } catch (error) {
     console.error("Failed to fetch dashboard data:", error);
     return { success: false, error: "Failed to fetch dashboard data." };
   }
 }
+
