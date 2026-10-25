@@ -16,13 +16,17 @@ import {
   Share2,
   Loader2,
   RefreshCw,
+  Zap,
 } from "lucide-react";
 import { getContentItems } from "@/server/actions/content";
 import {
   approveContentVersion,
   rejectContentVersion,
   resolveFlaggedFacts,
+  fastTrackApprove,
+  batchFastTrackApprove,
 } from "@/server/actions/approval";
+import { generateAutomatedDrafts } from "@/server/actions/automation";
 
 interface ContentItemUI {
   id: string;
@@ -55,6 +59,7 @@ function formatTimeAgo(date: Date | string): string {
 export default function ApprovalQueuePage() {
   const [items, setItems] = useState<ContentItemUI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isGeneratingDrafts, setIsGeneratingDrafts] = useState(false);
   const [isActionPending, setIsActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -223,10 +228,73 @@ export default function ApprovalQueuePage() {
     }
   };
 
+  const cleanPendingItems = pendingItems.filter((i) => !i.hasUnverifiedFacts);
+
+  const handleAutoGenerate = async () => {
+    setIsGeneratingDrafts(true);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const res = await generateAutomatedDrafts(3);
+      if (!res.success) {
+        setActionError(res.error || "Failed to generate automated drafts.");
+        return;
+      }
+      setActionSuccess(`⚡ Auto-generated ${res.createdCount} grounded marketing drafts for Kewakibt services!`);
+      await loadItems();
+    } catch (err: any) {
+      setActionError(err.message || "Failed to generate drafts.");
+    } finally {
+      setIsGeneratingDrafts(false);
+    }
+  };
+
+  const handleFastTrack = async (item: ContentItemUI) => {
+    setIsActionPending(true);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const res = await fastTrackApprove({ contentItemId: item.id });
+      if (!res.success) {
+        setActionError(res.error || "Fast-track approval failed.");
+        return;
+      }
+      setActionSuccess(`⚡ "${item.title}" fast-track approved and scheduled!`);
+      if (reviewingItem?.id === item.id) {
+        setReviewingItem(null);
+      }
+      await loadItems();
+    } catch (err: any) {
+      setActionError(err.message || "Fast-track approval failed.");
+    } finally {
+      setIsActionPending(false);
+    }
+  };
+
+  const handleBatchFastTrack = async () => {
+    if (cleanPendingItems.length === 0) return;
+    setIsActionPending(true);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const res = await batchFastTrackApprove(cleanPendingItems.map((i) => i.id));
+      if (!res.success) {
+        setActionError(res.error || "Batch approval failed.");
+        return;
+      }
+      setActionSuccess(`⚡ Approved and scheduled ${res.approvedCount} drafts in 1-click!`);
+      await loadItems();
+    } catch (err: any) {
+      setActionError(err.message || "Batch approval failed.");
+    } finally {
+      setIsActionPending(false);
+    }
+  };
+
   return (
     <div className="space-y-4 max-w-[1320px] mx-auto pb-8">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-base font-bold text-slate-900 leading-tight">
             Approval Queue
@@ -236,14 +304,42 @@ export default function ApprovalQueuePage() {
           </p>
         </div>
 
-        <button
-          onClick={loadItems}
-          disabled={isLoading}
-          className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-2xs cursor-pointer"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-          <span>Refresh</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleAutoGenerate}
+            disabled={isGeneratingDrafts || isLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+            title="Auto-generates grounded drafts across verified Kewakibt services"
+          >
+            {isGeneratingDrafts ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+            )}
+            <span>{isGeneratingDrafts ? "Generating Drafts..." : "⚡ Auto-Generate Weekly Drafts"}</span>
+          </button>
+
+          {activeTab === "pending" && cleanPendingItems.length > 0 && (
+            <button
+              onClick={handleBatchFastTrack}
+              disabled={isActionPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+              title="1-Click fast-track approve all fact-verified drafts"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>⚡ 1-Click Approve All ({cleanPendingItems.length})</span>
+            </button>
+          )}
+
+          <button
+            onClick={loadItems}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-2xs cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
       {actionSuccess && (
@@ -440,13 +536,29 @@ export default function ApprovalQueuePage() {
                   </button>
 
                   {item.status === "pending" && (
-                    <button
-                      onClick={() => handleApprove(item)}
-                      disabled={isActionPending || item.hasUnverifiedFacts}
-                      className="py-1 px-3 rounded-lg bg-kewa-teal hover:bg-kewa-teal-hover text-white text-[11px] font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-40"
-                    >
-                      Approve
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleFastTrack(item)}
+                        disabled={isActionPending || item.hasUnverifiedFacts}
+                        title={
+                          item.hasUnverifiedFacts
+                            ? "APR-007: Unverified facts must be resolved before approval"
+                            : "1-Click fast-track approve and auto-schedule"
+                        }
+                        className="py-1 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-40"
+                      >
+                        <Zap className="w-3 h-3 text-amber-300 fill-amber-300" />
+                        <span>1-Click Approve</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleApprove(item)}
+                        disabled={isActionPending || item.hasUnverifiedFacts}
+                        className="py-1 px-3 rounded-lg bg-kewa-teal hover:bg-kewa-teal-hover text-white text-[11px] font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-40"
+                      >
+                        Approve
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

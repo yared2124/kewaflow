@@ -14,9 +14,11 @@ import {
   ShieldCheck,
   HelpCircle,
   Loader2,
+  Zap,
 } from "lucide-react";
 import { getBrandProfile } from "@/server/actions/brand";
 import { createContentItem, generateContentWithAI } from "@/server/actions/content";
+import { generateAutomatedDrafts } from "@/server/actions/automation";
 
 interface VerifiedService {
   id: string;
@@ -36,6 +38,7 @@ export default function ContentStudioPage() {
   const [topic, setTopic] = useState("Benefits of custom software for businesses");
   const [tone, setTone] = useState("Professional");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingBatch, setIsGeneratingBatch] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
@@ -181,10 +184,30 @@ export default function ContentStudioPage() {
     }
   };
 
+  const handleGenerateBatch = async () => {
+    setIsGeneratingBatch(true);
+    setSaveError(null);
+    setSaveSuccessMsg(null);
+    try {
+      const res = await generateAutomatedDrafts(3);
+      if (!res.success) {
+        setSaveError(res.error || "Failed to generate batch drafts.");
+        return;
+      }
+      setSaveSuccessMsg(
+        `⚡ Auto-Pilot generated ${res.createdCount} grounded marketing drafts! You can review or 1-click approve them now in the Approval Queue.`
+      );
+    } catch (err: any) {
+      setSaveError(err.message || "Failed to generate batch drafts.");
+    } finally {
+      setIsGeneratingBatch(false);
+    }
+  };
+
   return (
     <div className="space-y-4 max-w-[1320px] mx-auto pb-8">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-base font-bold text-slate-900 leading-tight">
             Content Studio
@@ -192,6 +215,30 @@ export default function ContentStudioPage() {
           <p className="text-[12px] text-slate-700">
             Create grounded marketing content (BRD-001: Zero invented claims, verified against Brand Profile).
           </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleGenerateBatch}
+            disabled={isGeneratingBatch}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+            title="Auto-generates 3 weekly drafts grounded in Kewakibt verified services"
+          >
+            {isGeneratingBatch ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+            )}
+            <span>{isGeneratingBatch ? "Generating Drafts..." : "⚡ Auto-Pilot: 3 Weekly Drafts"}</span>
+          </button>
+
+          <Link
+            href="/approvals"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-2xs"
+          >
+            <span>Approval Queue</span>
+            <span className="text-[10px] text-slate-400">→</span>
+          </Link>
         </div>
       </div>
 
