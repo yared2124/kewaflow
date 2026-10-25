@@ -18,7 +18,7 @@ import {
   Loader2,
   RefreshCw,
 } from "lucide-react";
-import { getMediaAssets, MediaAssetRecord } from "@/server/actions/media";
+import { getMediaAssets, uploadMediaAsset, MediaAssetRecord } from "@/server/actions/media";
 
 export default function MediaLibraryPage() {
   const [assets, setAssets] = useState<MediaAssetRecord[]>([]);
@@ -28,6 +28,8 @@ export default function MediaLibraryPage() {
   const [selectedAsset, setSelectedAsset] = useState<MediaAssetRecord | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const loadMedia = async () => {
     setIsLoading(true);
@@ -53,24 +55,30 @@ export default function MediaLibraryPage() {
     return matchesSearch && matchesType;
   });
 
-  const handleSimulateUpload = () => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
     setIsUploading(true);
-    setTimeout(() => {
-      const newAsset: MediaAssetRecord = {
-        id: `media-${Date.now()}`,
-        name: `upload-${Date.now().toString().slice(-4)}.jpg`,
-        sizeStr: "1.4 MB",
-        format: "JPG",
-        type: "image",
-        imageUrl: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=500&auto=format&fit=crop&q=80",
-        dimensions: "1920 × 1080",
-        uploadedAgo: "Just now",
-        aiGenerated: false,
-      };
-      setAssets([newAsset, ...assets]);
+    setUploadError(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await uploadMediaAsset(formData);
+      if (res.success && res.asset) {
+        setAssets([res.asset, ...assets]);
+        setShowUploadModal(false);
+      } else {
+        setUploadError(res.error || "Failed to upload file.");
+      }
+    } catch {
+      setUploadError("Unexpected error during file upload.");
+    } finally {
       setIsUploading(false);
-      setShowUploadModal(false);
-    }, 700);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -269,10 +277,28 @@ export default function MediaLibraryPage() {
               </button>
             </div>
 
-            <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center space-y-2 hover:bg-slate-50 transition-colors">
+            {uploadError && (
+              <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                <span>{uploadError}</span>
+              </div>
+            )}
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+            />
+
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center space-y-2 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
               <Upload className="w-8 h-8 mx-auto text-slate-400" />
               <p className="text-xs font-semibold text-slate-800">
-                Drag and drop files here, or click to browse
+                {isUploading ? "Uploading & Verifying Binary..." : "Click to browse or drop an image file"}
               </p>
               <p className="text-[10px] text-slate-400">
                 JPG, PNG, WEBP up to 8MB (NFR-007). Verified against MIME type (SEC-008).
@@ -281,18 +307,21 @@ export default function MediaLibraryPage() {
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
               <button
-                onClick={() => setShowUploadModal(false)}
-                className="py-1 px-3 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold"
+                onClick={() => {
+                  setShowUploadModal(false);
+                  setUploadError(null);
+                }}
+                className="py-1 px-3 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold cursor-pointer"
               >
                 Cancel
               </button>
               <button
-                onClick={handleSimulateUpload}
+                onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
                 className="py-1 px-3.5 rounded-lg bg-kewa-teal text-white text-[11px] font-bold shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                <span>{isUploading ? "Uploading..." : "Upload File"}</span>
+                <span>{isUploading ? "Verifying..." : "Select Image"}</span>
               </button>
             </div>
           </div>

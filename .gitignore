@@ -40,3 +40,7 @@ next-env.d.ts
 # OS files
 .DS_Store
 Thumbs.db
+
+# User uploads
+public/uploads/*
+!public/uploads/.gitkeep

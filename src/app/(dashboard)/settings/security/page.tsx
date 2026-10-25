@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ShieldCheck,
@@ -25,27 +25,12 @@ import {
   ChevronRight,
   Sparkles,
   Share2,
+  Loader2,
 } from "lucide-react";
+import { getSecurityData, generateNewRecoveryCodes, SessionInfo, SecurityEventLog } from "@/server/actions/security";
 
-interface SessionItem {
-  id: string;
-  device: string;
-  browser: string;
-  location: string;
-  ip: string;
-  isCurrent: boolean;
-  lastActive: string;
-}
-
-interface SecurityLogItem {
-  id: string;
-  event: string;
-  category: "auth" | "approval" | "integration" | "session";
-  location: string;
-  device: string;
-  time: string;
-  status: "Success" | "Verified" | "Authorized";
-}
+type SessionItem = SessionInfo;
+type SecurityLogItem = SecurityEventLog;
 
 export default function SecuritySettingsPage() {
   const [showMfaModal, setShowMfaModal] = useState(false);
@@ -53,78 +38,60 @@ export default function SecuritySettingsPage() {
   const [revealCodes, setRevealCodes] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [alertNotice, setAlertNotice] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRegeneratingCodes, setIsRegeneratingCodes] = useState(false);
 
-  // Active sessions in Addis Ababa, Ethiopia (PRD / Design mockup)
-  const [sessions, setSessions] = useState<SessionItem[]>([
-    {
-      id: "sess-1",
-      device: "MacBook Pro (macOS 15.1)",
-      browser: "Google Chrome 129.0",
-      location: "Addis Ababa, Ethiopia (Bole Subcity)",
-      ip: "196.188.142.74",
-      isCurrent: true,
-      lastActive: "Active now",
-    },
-    {
-      id: "sess-2",
-      device: "iPhone 15 Pro (iOS 18.0)",
-      browser: "Mobile Safari",
-      location: "Addis Ababa, Ethiopia",
-      ip: "196.188.140.22",
-      isCurrent: false,
-      lastActive: "2 hours ago",
-    },
+  // Active sessions in Addis Ababa, Ethiopia (Live from PostgreSQL & Session token)
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [securityLogs, setSecurityLogs] = useState<SecurityLogItem[]>([]);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([
+    "KEWA-8821-X4B2",
+    "KEWA-7719-M3K9",
+    "KEWA-9944-Z2A1",
+    "KEWA-5512-P9T8",
+    "KEWA-3301-R7Q4",
+    "KEWA-6688-L1V5",
+    "KEWA-1122-C8X9",
+    "KEWA-4490-W5B3",
   ]);
 
-  const recoveryCodes = [
-    "KEWA-8821-X4B2",
-    "KEWA-7719-P09K",
-    "KEWA-4102-M28Z",
-    "KEWA-6331-T88L",
-    "KEWA-9044-K12A",
-    "KEWA-5520-W91F",
-    "KEWA-3188-B77D",
-    "KEWA-2490-Q03N",
-  ];
+  const loadSecurityData = async () => {
+    setIsLoading(true);
+    try {
+      const res = await getSecurityData();
+      if (res.success) {
+        setSessions(res.sessions);
+        setSecurityLogs(res.securityLogs);
+      }
+    } catch (err) {
+      console.error("Failed to load security settings:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const securityLogs: SecurityLogItem[] = [
-    {
-      id: "log-1",
-      event: "AUTH_MFA_SUCCESS",
-      category: "auth",
-      location: "Addis Ababa, Ethiopia",
-      device: "Chrome / macOS",
-      time: "Today at 08:30 EAT",
-      status: "Success",
-    },
-    {
-      id: "log-2",
-      event: "RE_AUTH_CHALLENGE",
-      category: "approval",
-      location: "Addis Ababa, Ethiopia",
-      device: "Content Approval #3",
-      time: "Today at 09:15 EAT",
-      status: "Verified",
-    },
-    {
-      id: "log-3",
-      event: "META_TOKEN_ACCESSED",
-      category: "integration",
-      location: "KewaFlow Server Engine",
-      device: "Graph API v21.0 Dispatch",
-      time: "Yesterday at 18:42 EAT",
-      status: "Authorized",
-    },
-    {
-      id: "log-4",
-      event: "SESSION_MFA_ENROLLED",
-      category: "session",
-      location: "Addis Ababa, Ethiopia",
-      device: "TOTP Authenticator",
-      time: "10 Oct 2026, 14:10 EAT",
-      status: "Success",
-    },
-  ];
+  useEffect(() => {
+    loadSecurityData();
+  }, []);
+
+  const handleRegenerateRecoveryCodes = async () => {
+    setIsRegeneratingCodes(true);
+    try {
+      const res = await generateNewRecoveryCodes();
+      if (res.success && res.codes) {
+        setRecoveryCodes(res.codes);
+        setAlertNotice("8 new emergency recovery codes generated and logged to AuditLog (SEC-007).");
+        loadSecurityData();
+      } else {
+        setAlertNotice("Failed to regenerate recovery codes.");
+      }
+    } catch {
+      setAlertNotice("Error regenerating recovery codes.");
+    } finally {
+      setIsRegeneratingCodes(false);
+      setTimeout(() => setAlertNotice(null), 4000);
+    }
+  };
 
   const handleTerminateOtherSessions = () => {
     setSessions((prev) => prev.filter((s) => s.isCurrent));
@@ -615,24 +582,36 @@ export default function SecuritySettingsPage() {
               </div>
             </div>
 
-            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
               <button
-                onClick={() => setShowRecoveryModal(false)}
-                className="px-3 py-1.5 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-lg text-xs font-medium"
+                onClick={handleRegenerateRecoveryCodes}
+                disabled={isRegeneratingCodes}
+                className="px-3 py-1.5 border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
-                Done
+                {isRegeneratingCodes ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                <span>Regenerate Codes</span>
               </button>
-              <button
-                onClick={() => {
-                  setAlertNotice("Recovery codes downloaded to secure vault file.");
-                  setShowRecoveryModal(false);
-                  setTimeout(() => setAlertNotice(null), 3000);
-                }}
-                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Download Codes
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowRecoveryModal(false)}
+                  className="px-3 py-1.5 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-lg text-xs font-medium cursor-pointer"
+                >
+                  Done
+                </button>
+                <button
+                  onClick={() => {
+                    handleCopyCodes();
+                    setAlertNotice("Recovery codes copied to clipboard.");
+                    setShowRecoveryModal(false);
+                    setTimeout(() => setAlertNotice(null), 3000);
+                  }}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Save Codes
+                </button>
+              </div>
             </div>
           </div>
         </div>
