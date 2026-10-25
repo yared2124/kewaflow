@@ -13,21 +13,34 @@ import {
   ArrowRight,
 } from "lucide-react";
 
+import { loginAdmin } from "@/server/actions/auth";
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("admin@kewaflow.com");
-  const [password, setPassword] = useState("••••••••");
+  const [password, setPassword] = useState("KewaFlowAdmin2026!");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
+    setErrorMessage(null);
+
+    try {
+      const res = await loginAdmin(email, password, rememberMe);
+      if (res.success && res.redirectTo) {
+        router.push(res.redirectTo);
+      } else {
+        setErrorMessage(res.error || "Invalid credentials. Please try again.");
+      }
+    } catch {
+      setErrorMessage("An unexpected authentication error occurred.");
+    } finally {
       setIsLoading(false);
-      router.push("/mfa");
-    }, 500);
+    }
   };
 
   return (
@@ -80,6 +93,13 @@ export default function LoginPage() {
           <p className="text-xs text-slate-500 mt-0.5 mb-4">
             Sign in to your KewaFlow account
           </p>
+
+          {errorMessage && (
+            <div className="mb-3 p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-3">
             {/* Email Address Box */}

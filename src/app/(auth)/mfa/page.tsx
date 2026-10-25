@@ -17,6 +17,8 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import { verifyMfa } from "@/server/actions/auth";
+
 export default function MfaPage() {
   const router = useRouter();
   const [digits, setDigits] = useState<string[]>(["1", "2", "3", "4", "5", "6"]);
@@ -68,7 +70,7 @@ export default function MfaPage() {
     }
   };
 
-  const handleVerify = (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!useBackupCode) {
       const code = digits.join("");
@@ -86,11 +88,25 @@ export default function MfaPage() {
     setIsVerifying(true);
     setErrorMessage(null);
 
-    // Simulate cryptographic verification and session issuance
-    setTimeout(() => {
+    try {
+      const res = await verifyMfa({
+        code: !useBackupCode ? digits.join("") : undefined,
+        backupCode: useBackupCode ? backupCode : undefined,
+      });
+
+      if (res.success && res.redirectTo) {
+        router.push(res.redirectTo);
+      } else {
+        setErrorMessage(res.error || "MFA Verification failed.");
+        if (res.redirectTo === "/login") {
+          setTimeout(() => router.push("/login"), 1500);
+        }
+      }
+    } catch {
+      setErrorMessage("An unexpected verification error occurred.");
+    } finally {
       setIsVerifying(false);
-      router.push("/dashboard");
-    }, 700);
+    }
   };
 
   return (

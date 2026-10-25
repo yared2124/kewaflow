@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/db/prisma";
+import { getSession } from "@/lib/auth/session";
 import { safeRevalidatePath } from "./utils";
 
 export async function getPendingApprovals() {
@@ -60,6 +61,9 @@ export async function approveContentVersion(payload: {
       };
     }
 
+    const session = await getSession();
+    const adminId = session?.adminId || "admin_yared";
+    const adminSessionId = session?.sessionId || "sess_admin_verified";
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days (APR-006)
 
     const result = await prisma.$transaction(async (tx) => {
@@ -68,8 +72,8 @@ export async function approveContentVersion(payload: {
         data: {
           contentItemId: payload.contentItemId,
           contentVersionId: payload.contentVersionId,
-          adminId: "admin_yared",
-          adminSessionId: "sess_admin_verified",
+          adminId,
+          adminSessionId,
           status: "ACTIVE",
           reviewedDiff: payload.reviewedDiff,
           confirmedExactFinal: payload.confirmedExactFinal,

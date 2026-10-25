@@ -19,6 +19,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { getBrandProfile } from "@/server/actions/brand";
+import { logoutAdmin } from "@/server/actions/auth";
 
 export default function DashboardLayout({
   children,
@@ -76,8 +77,13 @@ export default function DashboardLayout({
     };
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsProfileOpen(false);
+    try {
+      await logoutAdmin();
+    } catch {
+      // Fallback
+    }
     router.push("/login");
   };
 
