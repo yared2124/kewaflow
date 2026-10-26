@@ -30,11 +30,11 @@ export default function ContentStudioPage() {
   const [activeTab, setActiveTab] = useState<"text" | "image">("text");
   const [contentType, setContentType] = useState("Social Media Post");
   const [verifiedServices, setVerifiedServices] = useState<VerifiedService[]>([
-    { id: "srv-1", name: "Custom Enterprise Web Systems" },
+    { id: "srv-1", name: "Custom Systems" },
     { id: "srv-2", name: "Business Process Automation" },
-    { id: "srv-3", name: "Cloud Architecture & Migration" },
+    { id: "srv-3", name: "Cloud Architecture" },
   ]);
-  const [selectedService, setSelectedService] = useState("Custom Enterprise Web Systems");
+  const [selectedService, setSelectedService] = useState("Custom Systems");
   const [topic, setTopic] = useState("Benefits of custom software for businesses");
   const [tone, setTone] = useState("Professional");
   const [isGenerating, setIsGenerating] = useState(false);

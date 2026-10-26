@@ -16,12 +16,29 @@ export function validateServiceGrounding(
     };
   }
 
-  const matched = brandProfile.verifiedServices.find(
-    (s) =>
-      s.name.toLowerCase() === serviceName.toLowerCase() ||
-      serviceName.toLowerCase().includes(s.name.toLowerCase()) ||
-      s.name.toLowerCase().includes(serviceName.toLowerCase())
-  );
+  const sTokens = (str: string) =>
+    str
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, "")
+      .split(/\s+/)
+      .filter((t) => t.length > 2);
+
+  const reqTokens = sTokens(serviceName);
+
+  const matched = brandProfile.verifiedServices.find((s) => {
+    const sLower = s.name.toLowerCase();
+    const reqLower = serviceName.toLowerCase();
+    if (sLower === reqLower) return true;
+    if (reqLower.includes(sLower) || sLower.includes(reqLower)) return true;
+
+    // Check token overlap (e.g. "Custom" & "Systems" matching "Custom Enterprise Web Systems")
+    const candTokens = sTokens(s.name);
+    const commonTokens = candTokens.filter((t) => reqTokens.includes(t));
+    if (commonTokens.length >= 2 || (candTokens.length === 1 && commonTokens.length === 1)) {
+      return true;
+    }
+    return false;
+  });
 
   if (!matched) {
     return {

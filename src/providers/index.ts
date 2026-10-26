@@ -13,13 +13,14 @@ import { GeminiProviderAdapter } from "./adapters/gemini";
  */
 export function getAiProvider(preferred?: string): AiProviderAdapter {
   const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiModel = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
   if (preferred === "google-gemini" && geminiKey) {
-    return new GeminiProviderAdapter(geminiKey);
+    return new GeminiProviderAdapter(geminiKey, geminiModel);
   }
 
   if (geminiKey) {
-    return new GeminiProviderAdapter(geminiKey);
+    return new GeminiProviderAdapter(geminiKey, geminiModel);
   }
 
   // Fallback to strict local grounded engine (guarantees zero spend and BRD-001/002 compliance)
@@ -63,8 +64,19 @@ export async function executeAiGeneration(
     );
   }
 
-  // Execute Generation
-  const result = await provider.generatePost(request);
+  // Execute Generation with graceful fallback to LocalGroundedAdapter if remote API is unavailable
+  let result: AiGenerationResult;
+  try {
+    result = await provider.generatePost(request);
+  } catch (err: any) {
+    if (provider.name !== "kewaflow-grounded-engine") {
+      console.warn(`[AiProvider] ${provider.name} failed (${err.message}). Falling back to local grounded engine.`);
+      const fallback = new LocalGroundedAdapter();
+      result = await fallback.generatePost(request);
+    } else {
+      throw err;
+    }
+  }
 
   // Record in AiSpendLedger
   await prisma.aiSpendLedger.create({
