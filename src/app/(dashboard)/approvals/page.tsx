@@ -17,6 +17,7 @@ import {
   Loader2,
   RefreshCw,
   Zap,
+  Play,
 } from "lucide-react";
 import { getContentItems } from "@/server/actions/content";
 import {
@@ -102,7 +103,7 @@ export default function ApprovalQueuePage() {
             title: it.title,
             subtitle: "Verified against Kewakibt Brand Catalogue",
             createdAgo: `Updated ${formatTimeAgo(it.updatedAt)}`,
-            type: "Text + Image",
+            type: thumb.endsWith(".mp4") ? "Motion Video" : "Text + Image",
             status,
             thumbnail: thumb,
             caption: fullCaption,
@@ -476,13 +477,22 @@ export default function ApprovalQueuePage() {
 
                   {/* Thumbnail */}
                   <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-slate-100 shrink-0 border border-slate-200">
-                    <Image
-                      src={item.thumbnail}
-                      alt={item.title}
-                      fill
-                      unoptimized
-                      className="object-cover"
-                    />
+                    {item.thumbnail.endsWith(".mp4") ? (
+                      <div className="w-full h-full bg-slate-900 flex items-center justify-center relative">
+                        <video src={item.thumbnail} className="w-full h-full object-cover" muted />
+                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                          <Play className="w-4 h-4 text-white fill-white/80" />
+                        </div>
+                      </div>
+                    ) : (
+                      <Image
+                        src={item.thumbnail}
+                        alt={item.title}
+                        fill
+                        unoptimized
+                        className="object-cover"
+                      />
+                    )}
                   </div>
 
                   {/* Title & Metadata */}
@@ -668,15 +678,28 @@ export default function ApprovalQueuePage() {
                   {reviewingItem.caption}
                 </p>
 
-                <div className="relative rounded-lg overflow-hidden h-40 w-full bg-slate-100">
-                  <Image
-                    src={reviewingItem.thumbnail}
-                    alt={reviewingItem.title}
-                    fill
-                    unoptimized
-                    className="object-cover"
-                  />
-                </div>
+                {reviewingItem.thumbnail.endsWith(".mp4") ? (
+                  <div className="relative rounded-lg overflow-hidden bg-slate-950 flex items-center justify-center">
+                    <video
+                      src={reviewingItem.thumbnail}
+                      controls
+                      autoPlay
+                      loop
+                      playsInline
+                      className="w-full max-h-[260px] object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="relative rounded-lg overflow-hidden h-40 w-full bg-slate-100">
+                    <Image
+                      src={reviewingItem.thumbnail}
+                      alt={reviewingItem.title}
+                      fill
+                      unoptimized
+                      className="object-cover"
+                    />
+                  </div>
+                )}
 
                 <p className="text-[11px] font-semibold text-cyan-700">
                   {reviewingItem.hashtags}

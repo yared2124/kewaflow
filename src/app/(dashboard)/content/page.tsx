@@ -15,10 +15,14 @@ import {
   HelpCircle,
   Loader2,
   Zap,
+  Film,
+  Video,
+  Play,
 } from "lucide-react";
 import { getBrandProfile } from "@/server/actions/brand";
 import { createContentItem, generateContentWithAI } from "@/server/actions/content";
 import { generateAutomatedDrafts } from "@/server/actions/automation";
+import { generateMotionVideo } from "@/server/actions/video";
 
 interface VerifiedService {
   id: string;
@@ -27,8 +31,18 @@ interface VerifiedService {
 }
 
 export default function ContentStudioPage() {
-  const [activeTab, setActiveTab] = useState<"text" | "image">("text");
+  const [activeTab, setActiveTab] = useState<"text" | "image" | "video">("text");
   const [contentType, setContentType] = useState("Social Media Post");
+
+  // Video generation states (100% Free Local FFmpeg)
+  const [videoAspect, setVideoAspect] = useState<"1:1" | "9:16">("1:1");
+  const [videoHeadline, setVideoHeadline] = useState("Custom Systems Engineered to Scale");
+  const [videoSubtitle, setVideoSubtitle] = useState("High Availability & Cloud Architecture Solutions");
+  const [videoDuration, setVideoDuration] = useState(9);
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [previewVideo, setPreviewVideo] = useState<string | null>(null);
+  const [videoHash, setVideoHash] = useState<string | null>(null);
+
   const [verifiedServices, setVerifiedServices] = useState<VerifiedService[]>([
     { id: "srv-1", name: "Custom Systems" },
     { id: "srv-2", name: "Business Process Automation" },
@@ -126,6 +140,42 @@ export default function ContentStudioPage() {
     }
   };
 
+  const handleGenerateVideo = async () => {
+    setIsGeneratingVideo(true);
+    setSaveError(null);
+    setSaveSuccessMsg(null);
+    try {
+      const res = await generateMotionVideo({
+        serviceName: selectedService,
+        headline: videoHeadline,
+        subtitle: videoSubtitle,
+        aspect: videoAspect,
+        durationSeconds: videoDuration,
+      });
+
+      if (!res.success || !res.videoUrl) {
+        setSaveError(res.error || "Failed to render motion video.");
+        return;
+      }
+
+      setPreviewVideo(res.videoUrl);
+      setVideoHash(res.sha256Hash || null);
+      if (res.caption) setCaption(res.caption);
+      if (res.hashtags) setHashtags(res.hashtags);
+      setGenerationMeta({
+        provider: "FFmpeg Media Engine",
+        model: `Local H.264 (${res.resolution})`,
+        costUsd: 0.0,
+        groundedFactsUsed: [selectedService],
+      });
+      setSaveSuccessMsg("⚡ 100% Free motion video generated successfully! Zero API fees.");
+    } catch (err: any) {
+      setSaveError(err.message || "Failed to generate video.");
+    } finally {
+      setIsGeneratingVideo(false);
+    }
+  };
+
   const handleSaveDraft = async () => {
     setIsSaving(true);
     setSaveError(null);
@@ -133,10 +183,11 @@ export default function ContentStudioPage() {
 
     try {
       const fullCaption = `${caption.trim()}\n\n${hashtags.trim()}`;
+      const itemTitle = activeTab === "video" ? `${selectedService} — Motion Video` : (topic || selectedService);
       const res = await createContentItem({
-        title: topic || selectedService,
+        title: itemTitle,
         caption: fullCaption,
-        mediaUrls: [previewImage],
+        mediaUrls: previewVideo ? [previewVideo] : [previewImage],
         destinationPageId: "fb_page_kewakibt_main",
         readyForReview: false,
         flaggedFacts,
@@ -162,10 +213,11 @@ export default function ContentStudioPage() {
 
     try {
       const fullCaption = `${caption.trim()}\n\n${hashtags.trim()}`;
+      const itemTitle = activeTab === "video" ? `${selectedService} — Motion Video` : (topic || selectedService);
       const res = await createContentItem({
-        title: topic || selectedService,
+        title: itemTitle,
         caption: fullCaption,
-        mediaUrls: [previewImage],
+        mediaUrls: previewVideo ? [previewVideo] : [previewImage],
         destinationPageId: "fb_page_kewakibt_main",
         readyForReview: true,
         flaggedFacts,
@@ -282,98 +334,263 @@ export default function ContentStudioPage() {
             >
               Image Generation
             </button>
+            <button
+              onClick={() => setActiveTab("video")}
+              className={`text-xs font-bold pb-1 transition-colors relative flex items-center gap-1.5 ${
+                activeTab === "video"
+                  ? "text-kewa-teal border-b-2 border-kewa-teal"
+                  : "text-slate-400 hover:text-slate-700"
+              }`}
+            >
+              <Film className="w-3.5 h-3.5" />
+              <span>Video Generation</span>
+              <span className="px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-800 font-extrabold uppercase tracking-wider">
+                Free
+              </span>
+            </button>
           </div>
 
-          {/* Form Fields */}
-          <div className="space-y-3">
-            {/* Content Type */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-slate-700">
-                Content Type
-              </label>
-              <select
-                value={contentType}
-                onChange={(e) => setContentType(e.target.value)}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-kewa-teal"
-              >
-                <option>Social Media Post</option>
-                <option>Service Highlight</option>
-                <option>Client Case Study</option>
-                <option>Technical Educational</option>
-              </select>
-            </div>
-
-            {/* Verified Service Selector (Brand Grounding BRD-001) */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                  Verified Service (BRD-001)
-                  <HelpCircle className="w-3 h-3 text-slate-400" />
-                </label>
-                <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" /> Grounded
-                </span>
+          {activeTab === "video" ? (
+            /* Free Motion Video Generator Form */
+            <div className="space-y-3.5">
+              <div className="p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-200/90 text-emerald-900 text-xs space-y-1">
+                <div className="flex items-center justify-between font-bold text-[11px] text-emerald-800">
+                  <span className="flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    100% Free • Local FFmpeg Engine
+                  </span>
+                  <span className="bg-emerald-200/80 text-emerald-900 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold">$0.00 / Post</span>
+                </div>
+                <p className="text-[10px] text-emerald-700 leading-relaxed">
+                  Renders high-definition motion videos locally using KewaFlow's FFmpeg media engine (ADR-005). Zero third-party API fees or subscriptions.
+                </p>
               </div>
-              <select
-                value={selectedService}
-                onChange={(e) => setSelectedService(e.target.value)}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-kewa-teal"
+
+              {/* Verified Service Selector */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                    Verified Service (BRD-001)
+                    <HelpCircle className="w-3 h-3 text-slate-400" />
+                  </label>
+                  <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3" /> Grounded
+                  </span>
+                </div>
+                <select
+                  value={selectedService}
+                  onChange={(e) => setSelectedService(e.target.value)}
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-kewa-teal"
+                >
+                  {verifiedServices.map((srv) => (
+                    <option key={srv.id} value={srv.name}>
+                      {srv.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Aspect Ratio */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700">
+                  Format / Aspect Ratio
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVideoAspect("1:1")}
+                    className={`p-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      videoAspect === "1:1"
+                        ? "border-kewa-teal bg-teal-50/50 text-kewa-teal font-bold shadow-2xs"
+                        : "border-slate-200 hover:bg-slate-50 text-slate-600"
+                    }`}
+                  >
+                    <span>Square (1:1 Feed)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVideoAspect("9:16")}
+                    className={`p-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      videoAspect === "9:16"
+                        ? "border-kewa-teal bg-teal-50/50 text-kewa-teal font-bold shadow-2xs"
+                        : "border-slate-200 hover:bg-slate-50 text-slate-600"
+                    }`}
+                  >
+                    <span>Reel / Story (9:16)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Video Headline */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700">
+                  Video Main Headline / Hook
+                </label>
+                <input
+                  type="text"
+                  value={videoHeadline}
+                  onChange={(e) => setVideoHeadline(e.target.value)}
+                  placeholder="e.g. Scalable Web & Cloud Architecture"
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-kewa-teal"
+                />
+              </div>
+
+              {/* Video Subtitle / Tech Stack */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700">
+                  Subtitle / Highlight Detail
+                </label>
+                <input
+                  type="text"
+                  value={videoSubtitle}
+                  onChange={(e) => setVideoSubtitle(e.target.value)}
+                  placeholder="e.g. Next.js, Node.js & Enterprise Security"
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-kewa-teal"
+                />
+              </div>
+
+              {/* Video Duration */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700">
+                  Duration
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVideoDuration(9)}
+                    className={`p-1.5 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1 transition-all ${
+                      videoDuration === 9
+                        ? "border-kewa-teal bg-teal-50/50 text-kewa-teal font-bold"
+                        : "border-slate-200 hover:bg-slate-50 text-slate-600"
+                    }`}
+                  >
+                    <span>9 Seconds (Fast Hook)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVideoDuration(12)}
+                    className={`p-1.5 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1 transition-all ${
+                      videoDuration === 12
+                        ? "border-kewa-teal bg-teal-50/50 text-kewa-teal font-bold"
+                        : "border-slate-200 hover:bg-slate-50 text-slate-600"
+                    }`}
+                  >
+                    <span>12 Seconds (Detailed)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Generate Video Action Button */}
+              <button
+                onClick={handleGenerateVideo}
+                disabled={isGeneratingVideo}
+                className="w-full py-2.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:opacity-70 mt-2"
               >
-                {verifiedServices.map((srv) => (
-                  <option key={srv.id} value={srv.name}>
-                    {srv.name}
-                  </option>
-                ))}
-              </select>
+                {isGeneratingVideo ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Rendering Motion Video (FFmpeg)...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                    <span>⚡ Generate Free Motion Video ($0.00)</span>
+                  </>
+                )}
+              </button>
             </div>
+          ) : (
+            /* Existing Text & Image Form Fields */
+            <div className="space-y-3">
+              {/* Content Type */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700">
+                  Content Type
+                </label>
+                <select
+                  value={contentType}
+                  onChange={(e) => setContentType(e.target.value)}
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-kewa-teal"
+                >
+                  <option>Social Media Post</option>
+                  <option>Service Highlight</option>
+                  <option>Client Case Study</option>
+                  <option>Technical Educational</option>
+                </select>
+              </div>
 
-            {/* Topic / Idea */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-slate-700">
-                Topic / Idea
-              </label>
-              <textarea
-                rows={3}
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="e.g. Benefits of custom software for businesses"
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-kewa-teal resize-none"
-              />
-            </div>
+              {/* Verified Service Selector (Brand Grounding BRD-001) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                    Verified Service (BRD-001)
+                    <HelpCircle className="w-3 h-3 text-slate-400" />
+                  </label>
+                  <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3" /> Grounded
+                  </span>
+                </div>
+                <select
+                  value={selectedService}
+                  onChange={(e) => setSelectedService(e.target.value)}
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-kewa-teal"
+                >
+                  {verifiedServices.map((srv) => (
+                    <option key={srv.id} value={srv.name}>
+                      {srv.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Tone Selector */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-slate-700">
-                Tone
-              </label>
-              <select
-                value={tone}
-                onChange={(e) => setTone(e.target.value)}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-kewa-teal"
+              {/* Topic / Idea */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700">
+                  Topic / Idea
+                </label>
+                <textarea
+                  rows={3}
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  placeholder="e.g. Benefits of custom software for businesses"
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-kewa-teal resize-none"
+                />
+              </div>
+
+              {/* Tone Selector */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700">
+                  Tone
+                </label>
+                <select
+                  value={tone}
+                  onChange={(e) => setTone(e.target.value)}
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-kewa-teal"
+                >
+                  <option>Professional & Authoritative</option>
+                  <option>Technical & Engineering-Centric</option>
+                  <option>Outcomes & ROI Driven</option>
+                  <option>Pragmatic & Grounded</option>
+                </select>
+              </div>
+
+              {/* Generate Button */}
+              <button
+                onClick={handleGenerate}
+                disabled={isGenerating}
+                className="w-full py-2 rounded-lg bg-kewa-teal hover:bg-kewa-teal-hover text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-70"
               >
-                <option>Professional & Authoritative</option>
-                <option>Technical & Engineering-Centric</option>
-                <option>Outcomes & ROI Driven</option>
-                <option>Pragmatic & Grounded</option>
-              </select>
+                {isGenerating ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Generating grounded copy...</span>
+                  </>
+                ) : (
+                  <span>Generate Content Draft</span>
+                )}
+              </button>
             </div>
-          </div>
-
-          {/* Generate Button */}
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="w-full py-2 rounded-lg bg-kewa-teal hover:bg-kewa-teal-hover text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-70"
-          >
-            {isGenerating ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                <span>Generating grounded copy...</span>
-              </>
-            ) : (
-              <span>Generate Content Draft</span>
-            )}
-          </button>
+          )}
         </div>
 
         {/* Right Column: Live Facebook Preview (7 cols) */}
@@ -446,16 +663,46 @@ export default function ContentStudioPage() {
                 className="w-full text-xs text-slate-800 leading-relaxed border border-slate-100 focus:ring-1 focus:ring-kewa-teal rounded p-1.5 resize-none"
               />
 
-              {/* Post Creative Photo */}
-              <div className="relative rounded-lg overflow-hidden h-44 w-full bg-slate-100">
-                <Image
-                  src={previewImage}
-                  alt="Post creative"
-                  fill
-                  unoptimized
-                  className="object-cover"
-                />
-              </div>
+              {/* Post Creative (Video or Photo) */}
+              {previewVideo ? (
+                <div className="space-y-2">
+                  <div
+                    className={`relative rounded-lg overflow-hidden bg-slate-950 flex items-center justify-center ${
+                      videoAspect === "9:16" ? "max-w-[240px] mx-auto aspect-[9/16]" : "w-full aspect-square max-h-[300px]"
+                    }`}
+                  >
+                    <video
+                      src={previewVideo}
+                      controls
+                      autoPlay
+                      loop
+                      playsInline
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  {videoHash && (
+                    <div className="p-1.5 rounded bg-slate-50 border border-slate-200 text-[10px] text-slate-600 flex items-center justify-between">
+                      <span className="font-semibold text-slate-700 flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                        Binary SHA-256 (APR-001):
+                      </span>
+                      <span className="font-mono text-[9px] text-slate-500 truncate max-w-[200px]" title={videoHash}>
+                        {videoHash}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="relative rounded-lg overflow-hidden h-44 w-full bg-slate-100">
+                  <Image
+                    src={previewImage}
+                    alt="Post creative"
+                    fill
+                    unoptimized
+                    className="object-cover"
+                  />
+                </div>
+              )}
 
               {/* Hashtags */}
               <p className="text-[11px] font-semibold text-cyan-700">
