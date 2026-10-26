@@ -3,12 +3,21 @@
 import { prisma } from "@/lib/db/prisma";
 import { safeRevalidatePath } from "./utils";
 
+function serializeBrandProfile<T extends { aiMonthlyBudgetCap?: any }>(
+  profile: T
+): Omit<T, "aiMonthlyBudgetCap"> & { aiMonthlyBudgetCap: number } {
+  return {
+    ...profile,
+    aiMonthlyBudgetCap: profile.aiMonthlyBudgetCap != null ? Number(profile.aiMonthlyBudgetCap) : 0,
+  };
+}
+
 export async function getBrandProfile() {
   try {
     const profile = await prisma.brandProfile.findUnique({
       where: { id: "default" },
     });
-    return { success: true, profile };
+    return { success: true, profile: profile ? serializeBrandProfile(profile) : null };
   } catch (error) {
     console.error("Failed to fetch brand profile:", error);
     return { success: false, error: "Failed to fetch brand profile." };
@@ -63,7 +72,7 @@ export async function updateBrandProfile(data: {
 
     safeRevalidatePath("/brand");
     safeRevalidatePath("/dashboard");
-    return { success: true, profile: updated };
+    return { success: true, profile: serializeBrandProfile(updated) };
   } catch (error) {
     console.error("Failed to update brand profile:", error);
     return { success: false, error: "Failed to update brand profile." };

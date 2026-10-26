@@ -5,6 +5,15 @@ import { safeRevalidatePath } from "./utils";
 
 export type ValidLeadStage = "INQUIRY" | "QUALIFIED" | "PROPOSAL" | "WON" | "LOST";
 
+function serializeLead<T extends { dealValueUsd?: any }>(
+  lead: T
+): Omit<T, "dealValueUsd"> & { dealValueUsd: number | null } {
+  return {
+    ...lead,
+    dealValueUsd: lead.dealValueUsd != null ? Number(lead.dealValueUsd) : null,
+  };
+}
+
 export async function getLeads(stage?: ValidLeadStage) {
   try {
     const leads = await prisma.lead.findMany({
@@ -19,7 +28,7 @@ export async function getLeads(stage?: ValidLeadStage) {
         },
       },
     });
-    return { success: true, leads };
+    return { success: true, leads: leads.map((l) => serializeLead(l)) };
   } catch (error) {
     console.error("Failed to fetch leads:", error);
     return { success: false, error: "Failed to fetch leads." };
@@ -66,7 +75,7 @@ export async function updateLeadStage(leadId: string, newStage: ValidLeadStage) 
 
     safeRevalidatePath("/leads");
     safeRevalidatePath("/dashboard");
-    return { success: true, lead };
+    return { success: true, lead: serializeLead(lead) };
   } catch (error) {
     console.error("Failed to update lead stage:", error);
     return { success: false, error: "Failed to update lead stage." };
@@ -116,7 +125,7 @@ export async function createLead(payload: {
 
     safeRevalidatePath("/leads");
     safeRevalidatePath("/dashboard");
-    return { success: true, lead };
+    return { success: true, lead: serializeLead(lead) };
   } catch (error) {
     console.error("Failed to create lead:", error);
     return { success: false, error: "Failed to create lead." };
