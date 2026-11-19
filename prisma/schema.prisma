@@ -143,8 +143,8 @@ model ApprovalRecord {
   status              ApprovalStatus @default(ACTIVE)
 
   // APR-009: Friction UX Verification
-  reviewedDiff        Boolean        @default(true)
-  confirmedExactFinal Boolean        @default(true)
+  reviewedDiff        Boolean        @default(false)
+  confirmedExactFinal Boolean        @default(false)
 
   approvedAt          DateTime       @default(now())
   invalidatedAt       DateTime?
@@ -258,4 +258,65 @@ model AuditLog {
   @@index([actorId])
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+// ==========================================
+// Authentication & Identity (SEC-001, SEC-005, SEC-006)
+// ==========================================
+
+model User {
+  id                  String         @id @default(cuid())
+  email               String         @unique
+  name                String         @default("Administrator")
+  passwordHash        String
+  role                String         @default("ADMIN")
+  
+  // Encrypted TOTP secret (AES-256-GCM via encryptCredential)
+  totpSecretEncrypted String?
+  totpEnabled         Boolean        @default(false)
+  
+  // Brute-force lockout protection
+  failedAttempts      Int            @default(0)
+  lockedUntil         DateTime?
+  
+  sessions            AdminSession[]
+  recoveryCodes       RecoveryCode[]
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([email])
+}
+
+model AdminSession {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  sessionTokenHash String    @unique
+  ipAddress        String?
+  userAgent        String?
+  mfaVerified      Boolean   @default(false)
+  
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model RecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  codeHash  String
+  usedAt    DateTime?
+  
+  createdAt DateTime  @default(now())
+
+  @@index([userId, usedAt])
 }
