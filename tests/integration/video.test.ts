@@ -5,8 +5,12 @@ import path from "path";
 import "dotenv/config";
 import { prisma } from "../../src/lib/db/prisma";
 import { generateMotionVideo } from "../../src/server/actions/video";
+import { authenticateTestAdmin } from "../fixtures/auth-helper";
 
 test("Free Video Generator Integration (ADR-005, BRD-001, APR-001)", async (t) => {
+  t.before(async () => {
+    await authenticateTestAdmin();
+  });
   await t.test("generates motion video with local FFmpeg, zero fees, and valid SHA-256 hash", async () => {
     const res = await generateMotionVideo({
       serviceName: "Custom Enterprise Web Systems",

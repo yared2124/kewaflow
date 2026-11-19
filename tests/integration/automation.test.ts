@@ -4,9 +4,14 @@ import "dotenv/config";
 import { generateAutomatedDrafts } from "../../src/server/actions/automation";
 import { fastTrackApprove, batchFastTrackApprove } from "../../src/server/actions/approval";
 import { prisma } from "../../src/lib/db/prisma";
+import { authenticateTestAdmin } from "../fixtures/auth-helper";
 
 test("Option A: Automated Draft Generation & 1-Click Fast-Track Approval Tests", async (t) => {
   let itemIds: string[] = [];
+
+  t.before(async () => {
+    await authenticateTestAdmin();
+  });
 
   await t.test("generateAutomatedDrafts: produces grounded drafts across services", async () => {
     const res = await generateAutomatedDrafts(2);
@@ -38,15 +43,28 @@ test("Option A: Automated Draft Generation & 1-Click Fast-Track Approval Tests",
     assert.equal(audit.entityType, "ContentItem");
   });
 
-  await t.test("fastTrackApprove: approves clean draft in 1-click & auto-schedules", async () => {
+  await t.test("fastTrackApprove: blocks approval without explicit confirmedExactFinal review (APR-009)", async () => {
     assert.ok(itemIds.length >= 1);
     const targetId = itemIds[0];
 
-    const approveRes = await fastTrackApprove({ contentItemId: targetId });
+    const rejectedRes = await fastTrackApprove({ contentItemId: targetId, confirmedExactFinal: false });
+    assert.equal(rejectedRes.success, false);
+    assert.match(rejectedRes.error || "", /APR-009 Violation/);
+  });
+
+  await t.test("fastTrackApprove: approves clean draft when confirmedExactFinal is true", async () => {
+    assert.ok(itemIds.length >= 1);
+    const targetId = itemIds[0];
+
+    const approveRes = await fastTrackApprove({ contentItemId: targetId, confirmedExactFinal: true });
     assert.equal(approveRes.success, true);
-    assert.ok(approveRes.approval);
-    assert.equal(approveRes.approval.status, "ACTIVE");
-    assert.equal(approveRes.approval.confirmedExactFinal, true);
+    if ("approval" in approveRes && approveRes.approval) {
+      assert.ok(approveRes.approval);
+      assert.equal(approveRes.approval.status, "ACTIVE");
+      assert.equal(approveRes.approval.confirmedExactFinal, true);
+    } else {
+      assert.fail("approveRes should contain approval");
+    }
 
     const updatedItem = await prisma.contentItem.findUnique({
       where: { id: targetId },
@@ -58,7 +76,7 @@ test("Option A: Automated Draft Generation & 1-Click Fast-Track Approval Tests",
 
     // Verify AuditLog
     const audit = await prisma.auditLog.findFirst({
-      where: { action: "FAST_TRACK_1CLICK_APPROVAL" },
+      where: { action: "FAST_TRACK_APPROVAL" },
       orderBy: { createdAt: "desc" },
     });
     assert.ok(audit);
@@ -96,7 +114,7 @@ test("Option A: Automated Draft Generation & 1-Click Fast-Track Approval Tests",
       data: { currentVersionId: unverifiedItem.versions[0].id },
     });
 
-    const res = await fastTrackApprove({ contentItemId: unverifiedItem.id });
+    const res = await fastTrackApprove({ contentItemId: unverifiedItem.id, confirmedExactFinal: true });
     assert.equal(res.success, false);
     assert.match(res.error || "", /APR-007 Violation/);
 
@@ -105,10 +123,10 @@ test("Option A: Automated Draft Generation & 1-Click Fast-Track Approval Tests",
     await prisma.contentItem.delete({ where: { id: unverifiedItem.id } });
   });
 
-  await t.test("batchFastTrackApprove: approves all clean items in single batch", async () => {
+  await t.test("batchFastTrackApprove: approves all clean items in single batch when confirmed", async () => {
     if (itemIds.length > 1) {
       const remainingIds = [itemIds[1]];
-      const batchRes = await batchFastTrackApprove(remainingIds);
+      const batchRes = await batchFastTrackApprove({ contentItemIds: remainingIds, confirmedExactFinal: true });
       assert.equal(batchRes.success, true);
       assert.equal(batchRes.approvedCount, 1);
       assert.equal(batchRes.failedCount, 0);

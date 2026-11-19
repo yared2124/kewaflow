@@ -6,8 +6,12 @@ import "dotenv/config";
 import { getSecurityData, generateNewRecoveryCodes } from "../../src/server/actions/security";
 import { getMediaAssets, uploadMediaAsset } from "../../src/server/actions/media";
 import { prisma } from "../../src/lib/db/prisma";
+import { authenticateTestAdmin } from "../fixtures/auth-helper";
 
 test("Step 4: Media Upload & Security Settings Live Data (SEC-006, SEC-007, SEC-008, NFR-007)", async (t) => {
+  t.before(async () => {
+    await authenticateTestAdmin();
+  });
   await t.test("security.actions: query live session and audit events", async () => {
     const res = await getSecurityData();
     assert.equal(res.success, true);

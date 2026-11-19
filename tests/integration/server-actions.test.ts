@@ -19,9 +19,38 @@ import { getCalendarPosts, schedulePost } from "../../src/server/actions/calenda
 import { getAuditLogs } from "../../src/server/actions/audit";
 import { getDashboardData } from "../../src/server/actions/dashboard";
 
+import { prisma } from "../../src/lib/db/prisma";
+import crypto from "crypto";
+import { signToken, setTestSessionCookie } from "../../src/lib/auth/session";
+
 test("Step 2: Server Actions Layer Integration Tests", async (t) => {
   let createdItemId = "";
   let createdVersionId = "";
+
+  t.before(async () => {
+    const adminUser = await prisma.user.findFirst({ where: { role: "ADMIN" } });
+    if (adminUser) {
+      const sessionId = `sess_server_actions_${Date.now()}`;
+      await prisma.adminSession.create({
+        data: {
+          id: sessionId,
+          userId: adminUser.id,
+          sessionTokenHash: crypto.createHash("sha256").update(sessionId).digest("hex"),
+          mfaVerified: true,
+          expiresAt: new Date(Date.now() + 86400000),
+        },
+      });
+      const token = await signToken({
+        adminId: adminUser.id,
+        email: adminUser.email,
+        sessionId,
+        mfaVerified: true,
+        issuedAt: Date.now(),
+        expiresAt: Date.now() + 86400000,
+      });
+      setTestSessionCookie(token);
+    }
+  });
 
   await t.test("brand.actions: fetch and update brand profile", async () => {
     const res = await getBrandProfile();
@@ -227,6 +256,10 @@ test("Step 2: Server Actions Layer Integration Tests", async (t) => {
       reviewedDiff: true,
     });
     assert.equal(allowedApproval.success, true);
-    assert.equal(allowedApproval.updatedItem?.reviewState, "APPROVED");
+    if ("updatedItem" in allowedApproval && allowedApproval.updatedItem) {
+      assert.equal(allowedApproval.updatedItem.reviewState, "APPROVED");
+    } else {
+      assert.fail("allowedApproval should contain updatedItem");
+    }
   });
 });
