@@ -1,10 +1,40 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import crypto from "crypto";
 import "dotenv/config";
 import { prisma } from "../../src/lib/db/prisma";
 import { getBrandProfile, updateBrandProfile } from "../../src/server/actions/brand";
+import { signToken, setTestSessionCookie } from "../../src/lib/auth/session";
 
 test("Step 3: Brand Profile Page Integration", async (t) => {
+  let adminUserId = "";
+
+  t.before(async () => {
+    const adminUser = await prisma.user.findFirst({ where: { role: "ADMIN" } });
+    if (adminUser) {
+      adminUserId = adminUser.id;
+      const sessionId = `sess_brand_test_${Date.now()}`;
+      await prisma.adminSession.create({
+        data: {
+          id: sessionId,
+          userId: adminUser.id,
+          sessionTokenHash: crypto.createHash("sha256").update(sessionId).digest("hex"),
+          mfaVerified: true,
+          expiresAt: new Date(Date.now() + 86400000),
+        },
+      });
+      const token = await signToken({
+        adminId: adminUser.id,
+        email: adminUser.email,
+        sessionId,
+        mfaVerified: true,
+        issuedAt: Date.now(),
+        expiresAt: Date.now() + 86400000,
+      });
+      setTestSessionCookie(token);
+    }
+  });
+
   await t.test("getBrandProfile returns active database record", async () => {
     const res = await getBrandProfile();
     assert.equal(res.success, true);
@@ -60,6 +90,6 @@ test("Step 3: Brand Profile Page Integration", async (t) => {
       orderBy: { createdAt: "desc" },
     });
     assert.ok(log, "AuditLog entry must be created on brand profile update");
-    assert.equal(log.actorId, "admin_yared");
+    assert.equal(log.actorId, adminUserId);
   });
 });
