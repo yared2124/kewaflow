@@ -26,6 +26,25 @@ export function createPublishingWorker() {
 
       const { item, version } = validation;
 
+      // 1b. Check for existing successful attempt (Idempotency Guard - prevents double-posting on redelivery)
+      const existingAttempt = await prisma.publishingAttempt.findUnique({
+        where: { idempotencyKey: payload.idempotencyKey },
+      });
+
+      if (existingAttempt && existingAttempt.status === "SUCCESS") {
+        console.log(
+          `[PublishingWorker] Idempotency key ${payload.idempotencyKey} already succeeded (${existingAttempt.platformPostId}). Skipping duplicate Meta dispatch.`
+        );
+        await prisma.contentItem.update({
+          where: { id: item.id },
+          data: {
+            jobState: "UNSCHEDULED",
+            publicationOutcome: "PUBLISHED",
+          },
+        });
+        return { success: true, platformPostId: existingAttempt.platformPostId };
+      }
+
       // 2. Transition state to PUBLISHING & record IN_FLIGHT attempt
       await prisma.$transaction(async (tx) => {
         await tx.contentItem.update({

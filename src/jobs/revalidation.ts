@@ -149,24 +149,32 @@ export async function handleRevalidationFailure(
       },
     });
 
-    // Record failed attempt
-    await tx.publishingAttempt.upsert({
-      where: { idempotencyKey: payload.idempotencyKey },
-      create: {
-        contentItemId: payload.contentItemId,
-        contentVersionId: payload.contentVersionId,
-        idempotencyKey: payload.idempotencyKey,
-        attemptIndex: payload.attemptIndex,
-        status: "FAILED",
-        errorMessage: reason,
-        completedAt: new Date(),
-      },
-      update: {
-        status: "FAILED",
-        errorMessage: reason,
-        completedAt: new Date(),
-      },
+    // Record a failed attempt only when the payload version exists. A forged
+    // or stale version ID cannot satisfy the FK and must still be dead-lettered.
+    const versionExists = await tx.contentVersion.findUnique({
+      where: { id: payload.contentVersionId },
+      select: { id: true },
     });
+
+    if (versionExists) {
+      await tx.publishingAttempt.upsert({
+        where: { idempotencyKey: payload.idempotencyKey },
+        create: {
+          contentItemId: payload.contentItemId,
+          contentVersionId: payload.contentVersionId,
+          idempotencyKey: payload.idempotencyKey,
+          attemptIndex: payload.attemptIndex,
+          status: "FAILED",
+          errorMessage: reason,
+          completedAt: new Date(),
+        },
+        update: {
+          status: "FAILED",
+          errorMessage: reason,
+          completedAt: new Date(),
+        },
+      });
+    }
 
     // Audit Log (SEC-007)
     await tx.auditLog.create({

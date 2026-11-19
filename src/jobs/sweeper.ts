@@ -116,6 +116,88 @@ export async function sweepScheduledPosts(): Promise<SweeperResult> {
 }
 
 /**
+ * APR-006: Approval Expiry Sweeper
+ * Marks active approvals older than 30 days as EXPIRED.
+ * Resets item review state to NEEDS_REVIEW and cancels any queued jobs.
+ */
+export async function expireStaleApprovals(): Promise<number> {
+  const now = new Date();
+  const expiredRecords = await prisma.approvalRecord.findMany({
+    where: {
+      status: "ACTIVE",
+      expiresAt: { lte: now },
+    },
+    include: { contentItem: true },
+  });
+
+  for (const approval of expiredRecords) {
+    await prisma.$transaction(async (tx) => {
+      await tx.approvalRecord.update({
+        where: { id: approval.id },
+        data: { status: "EXPIRED" },
+      });
+
+      if (approval.contentItem && approval.contentItem.reviewState === "APPROVED") {
+        await tx.contentItem.update({
+          where: { id: approval.contentItemId },
+          data: {
+            reviewState: "NEEDS_REVIEW",
+            jobState:
+              approval.contentItem.jobState === "SCHEDULED"
+                ? "CANCELLED"
+                : approval.contentItem.jobState,
+          },
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actorId: "system_outbox_sweeper",
+          action: "APPROVAL_EXPIRED_BY_SWEEPER",
+          entityType: "ApprovalRecord",
+          entityId: approval.id,
+          metadata: {
+            contentItemId: approval.contentItemId,
+            contentVersionId: approval.contentVersionId,
+            expiresAt: approval.expiresAt.toISOString(),
+            reason: "Exceeded 30-day validity window without dispatch per APR-006",
+          },
+        },
+      });
+    });
+
+    // Remove any queued job from BullMQ
+    const jobId = `publish_${approval.contentItemId}_${approval.contentVersionId}`;
+    try {
+      const job = await publishingQueue.getJob(jobId);
+      if (job) await job.remove();
+    } catch {}
+  }
+
+  return expiredRecords.length;
+}
+
+/**
+ * SEC-004: Reconcile Uncertain Publishing Attempts
+ * Identifies attempts with UNCERTAIN outcome to prevent blind retries.
+ */
+export async function reconcileUncertainPublishingAttempts(): Promise<number> {
+  const uncertainAttempts = await prisma.publishingAttempt.findMany({
+    where: { status: "UNCERTAIN" },
+    include: { contentItem: true },
+    take: 20,
+  });
+
+  for (const attempt of uncertainAttempts) {
+    console.warn(
+      `[Reconciliation] SEC-004: Uncertain publish attempt detected for item ${attempt.contentItemId} (idempotencyKey: ${attempt.idempotencyKey}). Awaiting Admin resolution before retry.`
+    );
+  }
+
+  return uncertainAttempts.length;
+}
+
+/**
  * Starts a background heartbeat daemon that sweeps PostgreSQL periodically.
  */
 export function startSweeperDaemon(intervalMs: number = 30000) {
@@ -123,10 +205,20 @@ export function startSweeperDaemon(intervalMs: number = 30000) {
   
   const timer = setInterval(async () => {
     try {
+      // 1. Sweep scheduled posts
       const res = await sweepScheduledPosts();
       if (res.enqueuedCount > 0) {
         console.log(`[OutboxSweeper] Enqueued ${res.enqueuedCount} posts from PostgreSQL outbox.`);
       }
+
+      // 2. Expire stale approvals (APR-006)
+      const expiredCount = await expireStaleApprovals();
+      if (expiredCount > 0) {
+        console.log(`[OutboxSweeper] Expired ${expiredCount} stale approvals (>30 days).`);
+      }
+
+      // 3. Scan for uncertain publication attempts (SEC-004)
+      await reconcileUncertainPublishingAttempts();
     } catch (err) {
       console.error("[OutboxSweeper] Error in sweep cycle:", err);
     }
