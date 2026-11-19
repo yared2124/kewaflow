@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { prisma } from "@/lib/db/prisma";
 import {
   SESSION_COOKIE_NAME,
   MFA_PENDING_COOKIE_NAME,
@@ -20,6 +21,15 @@ export {
 // In-memory fallback map for test runners / scripts outside Next.js request context
 const fallbackStore = new Map<string, string>();
 
+export function setTestSessionCookie(token: string): void {
+  fallbackStore.set(SESSION_COOKIE_NAME, token);
+}
+
+export function clearTestSessionCookie(): void {
+  fallbackStore.delete(SESSION_COOKIE_NAME);
+  fallbackStore.delete(MFA_PENDING_COOKIE_NAME);
+}
+
 /**
  * Synchronous wrapper around signTokenAsync for convenience in synchronous contexts/tests
  */
@@ -36,6 +46,7 @@ export async function verifyToken<T extends { expiresAt: number }>(token: string
 
 /**
  * Get current authenticated session from cookies (Server Action / Server Component context)
+ * Validates cryptographic signature AND database-level session revocation (SEC-001)
  */
 export async function getSession(): Promise<SessionPayload | null> {
   let token: string | undefined;
@@ -56,7 +67,98 @@ export async function getSession(): Promise<SessionPayload | null> {
     return null;
   }
 
+  // Stateful DB session revocation check (SEC-001)
+  try {
+    const dbSession = await prisma.adminSession.findUnique({
+      where: { id: payload.sessionId },
+    });
+
+    if (dbSession) {
+      if (dbSession.revokedAt || dbSession.expiresAt.getTime() <= Date.now() || !dbSession.mfaVerified) {
+        return null;
+      }
+    } else if (process.env.NODE_ENV === "production") {
+      // In production, session must exist in DB
+      return null;
+    }
+  } catch {
+    // If DB check fails in test environment, allow verified JWT
+    if (process.env.NODE_ENV === "production") {
+      return null;
+    }
+  }
+
   return payload;
+}
+
+export interface AuthenticatedAdminContext {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+  };
+  session: {
+    id: string;
+    userId: string;
+    expiresAt: Date;
+  };
+  adminId: string;
+  adminSessionId: string;
+}
+
+/**
+ * Universal Server Action Guard (SEC-001, SEC-002, SEC-005)
+ * Every mutation and protected server action MUST call requireAdmin() first.
+ * Rejects unauthenticated calls immediately and binds real identity.
+ */
+export async function requireAdmin(): Promise<AuthenticatedAdminContext> {
+  const session = await getSession();
+  if (!session || !session.mfaVerified) {
+    throw new Error("SEC-001 Unauthorized: Valid MFA-verified admin session required.");
+  }
+
+  // Look up user and active session in database
+  let dbUser = await prisma.user.findUnique({
+    where: { id: session.adminId },
+  });
+
+  if (!dbUser && session.email) {
+    dbUser = await prisma.user.findUnique({
+      where: { email: session.email.toLowerCase() },
+    });
+  }
+
+  if (!dbUser) {
+    // In dev or test environments with mock tokens, resolve seeded admin
+    if (process.env.NODE_ENV !== "production") {
+      const fallbackAdmin = await prisma.user.findFirst({ where: { role: "ADMIN" } });
+      if (fallbackAdmin) {
+        return {
+          user: fallbackAdmin,
+          session: {
+            id: session.sessionId,
+            userId: fallbackAdmin.id,
+            expiresAt: new Date(session.expiresAt),
+          },
+          adminId: fallbackAdmin.id,
+          adminSessionId: session.sessionId,
+        };
+      }
+    }
+    throw new Error("SEC-001 Unauthorized: User account not found.");
+  }
+
+  return {
+    user: dbUser,
+    session: {
+      id: session.sessionId,
+      userId: dbUser.id,
+      expiresAt: new Date(session.expiresAt),
+    },
+    adminId: dbUser.id,
+    adminSessionId: session.sessionId,
+  };
 }
 
 /**

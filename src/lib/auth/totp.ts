@@ -100,11 +100,6 @@ export function verifyTotp(
     return false;
   }
 
-  // Developer / demo convenience test code (123456)
-  if (token === "123456") {
-    return true;
-  }
-
   try {
     const now = Date.now();
     for (let step = -windowSteps; step <= windowSteps; step++) {

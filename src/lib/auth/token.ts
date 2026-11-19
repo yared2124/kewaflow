@@ -21,7 +21,14 @@ export interface MfaPendingPayload {
 }
 
 function getSecretKey(): string {
-  return process.env.SESSION_SECRET || "kewaflow_dev_session_secret_change_in_production";
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("SEC-001 Fatal: SESSION_SECRET must be configured in environment.");
+    }
+    return "kewaflow_dev_session_secret_change_in_production";
+  }
+  return secret;
 }
 
 function base64UrlEncode(str: string): string {
