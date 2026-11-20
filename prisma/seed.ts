@@ -1,18 +1,69 @@
 import "dotenv/config";
 import { prisma } from "../src/lib/db/prisma";
-import { computeContentVersionHash } from "../src/lib/crypto";
+import { computeContentVersionHash, encryptCredential } from "../src/lib/crypto";
+import { hashPassword, hashRecoveryCode, generateEmergencyRecoveryCodes } from "../src/lib/auth/password";
 
 async function main() {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "SECURITY SAFEGUARD: Database seeding with destructive reset is strictly prohibited in production."
+    );
+  }
+
   console.log("🌱 Starting KewaFlow baseline database seed...");
 
   // 1. Clean existing records for clean idempotent seeding
+  await prisma.recoveryCode.deleteMany();
+  await prisma.adminSession.deleteMany();
+  await prisma.user.deleteMany();
   await prisma.approvalRecord.deleteMany();
   await prisma.publishingAttempt.deleteMany();
   await prisma.lead.deleteMany();
   await prisma.contentVersion.deleteMany();
   await prisma.contentItem.deleteMany();
   await prisma.brandProfile.deleteMany();
-  await prisma.auditLog.deleteMany();
+  // AuditLog is database-enforced append-only (SEC-007). Keep historical
+  // records across development reseeds instead of attempting to delete them.
+
+  // 2. Seed Primary Admin User (SEC-001, SEC-005, SEC-006)
+  console.log("Creating Verified Admin Account...");
+  const adminEmail = (process.env.ADMIN_EMAIL || "admin@kewaflow.com").toLowerCase();
+  const rawAdminPassword = process.env.ADMIN_INITIAL_PASSWORD || process.env.ADMIN_PASSWORD || "KewaFlowAdmin2026!";
+  const passwordHash = await hashPassword(rawAdminPassword);
+  
+  // Use Base32 secret for TOTP authenticator
+  const rawTotpSecret = process.env.ADMIN_MFA_SECRET || "JBSWY3DPEHPK3PXP";
+  const totpSecretEncrypted = encryptCredential(rawTotpSecret);
+
+  const adminUser = await prisma.user.create({
+    data: {
+      email: adminEmail,
+      name: "Yared Aregayehu",
+      passwordHash,
+      role: "ADMIN",
+      totpSecretEncrypted,
+      totpEnabled: true,
+    },
+  });
+
+  // Seed Initial Break-Glass Emergency Recovery Codes (SEC-006)
+  const initialCodes = [
+    "KEWA-8821-X4B2",
+    "KEWA-7719-M3K9",
+    "KEWA-9944-Z2A1",
+    "KEWA-5512-P9T8",
+    "KEWA-3301-R7Q4",
+    "KEWA-6688-L1V5",
+    "KEWA-1122-C8X9",
+    "KEWA-4490-W5B3",
+  ];
+
+  await prisma.recoveryCode.createMany({
+    data: initialCodes.map((code) => ({
+      userId: adminUser.id,
+      codeHash: hashRecoveryCode(code),
+    })),
+  });
 
   // 2. Seed Brand Profile (BRD-001, BRD-002, BRD-003)
   console.log("Creating Brand Profile...");
