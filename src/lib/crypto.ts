@@ -63,6 +63,25 @@ export function decryptCredential(cipherPackage: string): string {
  * Hash input MUST include: caption text, all media binary hashes, destination Page ID,
  * CTA URL, any disclosures, scheduled time, and ad configuration if present.
  */
+export function computeMediaHashes(mediaUrls: string[]): string[] {
+  if (!mediaUrls || !Array.isArray(mediaUrls)) return [];
+  return mediaUrls.map((urlOrPath) => {
+    try {
+      if (typeof urlOrPath === "string" && urlOrPath.startsWith("/")) {
+        // If it's a local file on disk, read binary to compute content hash
+        const fs = require("fs");
+        if (fs.existsSync(urlOrPath)) {
+          const buffer = fs.readFileSync(urlOrPath);
+          return crypto.createHash("sha256").update(buffer).digest("hex");
+        }
+      }
+    } catch {
+      // Fallback to URL/string hash
+    }
+    return crypto.createHash("sha256").update(String(urlOrPath)).digest("hex");
+  });
+}
+
 export function computeContentVersionHash(payload: {
   caption: string;
   mediaHashes: string[];
