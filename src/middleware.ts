@@ -28,8 +28,8 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/images") ||
-    pathname.startsWith("/brand") ||
-    pathname.startsWith("/api") ||
+    pathname.startsWith("/api/health") ||
+    pathname.startsWith("/api/webhooks") ||
     pathname.includes(".")
   ) {
     return NextResponse.next();
