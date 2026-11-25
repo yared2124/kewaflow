@@ -1,9 +1,11 @@
 "use server";
 
 import { prisma } from "@/lib/db/prisma";
+import { requireAdmin } from "@/lib/auth/session";
 
 export async function getAnalyticsData() {
   try {
+    await requireAdmin();
     const [
       leads,
       contentItems,
