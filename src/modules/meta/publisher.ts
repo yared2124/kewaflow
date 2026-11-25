@@ -1,4 +1,5 @@
 import { PublishingJobData, PublishDispatchResult } from "@/jobs/types";
+import { decryptCredential } from "@/lib/crypto";
 
 export interface MetaPostPayload {
   message: string;
@@ -9,8 +10,31 @@ export interface MetaPostPayload {
 }
 
 /**
+ * Resolves the Meta access token, decrypting if encrypted per SEC-003.
+ */
+function resolveMetaToken(): string | null {
+  const raw = process.env.META_ACCESS_TOKEN;
+  if (!raw) return null;
+
+  // If token is encrypted with AES-256-GCM (format: iv:authTag:cipher)
+  if (raw.split(":").length === 3 && process.env.ENCRYPTION_KEY) {
+    try {
+      return decryptCredential(raw);
+    } catch (err: any) {
+      console.error("[MetaPublisher] Failed to decrypt encrypted META_ACCESS_TOKEN:", err.message);
+      return null;
+    }
+  }
+
+  return raw;
+}
+
+/**
  * Dispatches an approved post payload to Meta Graph API.
- * Respects SEC-004 (uncertain responses flagged UNCERTAIN, blind retries prohibited).
+ * Invariants:
+ * - SEC-003: Tokens stored encrypted at rest.
+ * - SEC-004: Uncertain responses flagged UNCERTAIN, blind retries prohibited.
+ * - Production: Dispatches MUST fail closed if credentials are missing or invalid.
  */
 export async function dispatchToPlatform(
   jobData: PublishingJobData,
@@ -21,9 +45,9 @@ export async function dispatchToPlatform(
     pageId: string;
   }
 ): Promise<PublishDispatchResult> {
-  const metaToken = process.env.META_ACCESS_TOKEN;
+  const metaToken = resolveMetaToken();
 
-  // Real Meta Graph API dispatch if token is present
+  // Real Meta Graph API dispatch if token is present and valid
   if (metaToken && metaToken.startsWith("EAAB")) {
     try {
       const endpoint = `https://graph.facebook.com/v21.0/${post.pageId}/feed`;
@@ -70,7 +94,17 @@ export async function dispatchToPlatform(
     }
   }
 
-  // High-fidelity sandbox / test dispatcher (Guarantees zero autonomous spend and safe test execution)
+  // Production fail-closed check: Never simulate success in production
+  const isTestEnvironment = process.env.NODE_ENV === "test";
+  if (!isTestEnvironment) {
+    return {
+      success: false,
+      isAmbiguous: false,
+      error: "Meta API credentials are not configured or invalid. Autonomous publishing blocked (Fail-Closed).",
+    };
+  }
+
+  // High-fidelity sandbox / test dispatcher (Guarantees safe test execution strictly in NODE_ENV=test)
   const isSimulatedFailure = post.caption.includes("__SIMULATE_FAILURE__");
   const isSimulatedTimeout = post.caption.includes("__SIMULATE_TIMEOUT__");
 
@@ -90,7 +124,7 @@ export async function dispatchToPlatform(
     };
   }
 
-  // Simulated successful publication
+  // Simulated successful publication for integration tests only
   const platformPostId = `fb_${post.pageId}_${Date.now()}`;
   return {
     success: true,
