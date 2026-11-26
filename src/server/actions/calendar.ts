@@ -2,10 +2,12 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { canSchedule } from "@/lib/state-machine/transitions";
+import { requireAdmin } from "@/lib/auth/session";
 import { safeRevalidatePath } from "./utils";
 
 export async function getCalendarPosts(month?: number, year?: number) {
   try {
+    await requireAdmin();
     const posts = await prisma.contentItem.findMany({
       where: {
         scheduledAt: { not: null },
@@ -28,6 +30,8 @@ export async function getCalendarPosts(month?: number, year?: number) {
 
 export async function schedulePost(contentItemId: string, scheduledAt: Date) {
   try {
+    const { user } = await requireAdmin();
+
     const item = await prisma.contentItem.findUnique({
       where: { id: contentItemId },
     });
@@ -56,7 +60,7 @@ export async function schedulePost(contentItemId: string, scheduledAt: Date) {
 
     await prisma.auditLog.create({
       data: {
-        actorId: "admin_yared",
+        actorId: user.id,
         action: "SCHEDULE_CONTENT",
         entityType: "ContentItem",
         entityId: contentItemId,
@@ -69,8 +73,8 @@ export async function schedulePost(contentItemId: string, scheduledAt: Date) {
     safeRevalidatePath("/calendar");
     safeRevalidatePath("/dashboard");
     return { success: true, item: updated };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to schedule post:", error);
-    return { success: false, error: "Failed to schedule post." };
+    return { success: false, error: error.message || "Failed to schedule post." };
   }
 }
