@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/db/prisma";
+import { requireAdmin } from "@/lib/auth/session";
 import { safeRevalidatePath } from "./utils";
 
 export type ValidLeadStage = "INQUIRY" | "QUALIFIED" | "PROPOSAL" | "WON" | "LOST";
@@ -16,6 +17,7 @@ function serializeLead<T extends { dealValueUsd?: any }>(
 
 export async function getLeads(stage?: ValidLeadStage) {
   try {
+    await requireAdmin();
     const leads = await prisma.lead.findMany({
       where: stage ? { stage } : undefined,
       orderBy: { updatedAt: "desc" },
@@ -36,7 +38,7 @@ export async function getLeads(stage?: ValidLeadStage) {
 }
 
 /**
- * Update lead stage (CRM-002)
+ * Update lead stage (CRM-002, SEC-001)
  */
 export async function updateLeadStage(leadId: string, newStage: ValidLeadStage) {
   const VALID_STAGES: ValidLeadStage[] = [
@@ -55,6 +57,8 @@ export async function updateLeadStage(leadId: string, newStage: ValidLeadStage) 
   }
 
   try {
+    const { user } = await requireAdmin();
+
     const lead = await prisma.lead.update({
       where: { id: leadId },
       data: { stage: newStage },
@@ -62,7 +66,7 @@ export async function updateLeadStage(leadId: string, newStage: ValidLeadStage) 
 
     await prisma.auditLog.create({
       data: {
-        actorId: "admin_yared",
+        actorId: user.id,
         action: "UPDATE_LEAD_STAGE",
         entityType: "Lead",
         entityId: leadId,
@@ -76,14 +80,14 @@ export async function updateLeadStage(leadId: string, newStage: ValidLeadStage) 
     safeRevalidatePath("/leads");
     safeRevalidatePath("/dashboard");
     return { success: true, lead: serializeLead(lead) };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to update lead stage:", error);
-    return { success: false, error: "Failed to update lead stage." };
+    return { success: false, error: error.message || "Failed to update lead stage." };
   }
 }
 
 /**
- * Create new lead with explicit attribution (CRM-001, CRM-003)
+ * Create new lead with explicit attribution (CRM-001, CRM-003, SEC-001)
  */
 export async function createLead(payload: {
   name: string;
@@ -96,6 +100,8 @@ export async function createLead(payload: {
   dealValueUsd?: number;
 }) {
   try {
+    const { user } = await requireAdmin();
+
     const lead = await prisma.lead.create({
       data: {
         name: payload.name,
@@ -111,7 +117,7 @@ export async function createLead(payload: {
 
     await prisma.auditLog.create({
       data: {
-        actorId: "admin_yared",
+        actorId: user.id,
         action: "CREATE_LEAD",
         entityType: "Lead",
         entityId: lead.id,
@@ -126,8 +132,8 @@ export async function createLead(payload: {
     safeRevalidatePath("/leads");
     safeRevalidatePath("/dashboard");
     return { success: true, lead: serializeLead(lead) };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to create lead:", error);
-    return { success: false, error: "Failed to create lead." };
+    return { success: false, error: error.message || "Failed to create lead." };
   }
 }
