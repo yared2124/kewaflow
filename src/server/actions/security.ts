@@ -1,8 +1,8 @@
 "use server";
 
-import crypto from "crypto";
 import { prisma } from "@/lib/db/prisma";
-import { getSession } from "@/lib/auth/session";
+import { requireAdmin, getSession } from "@/lib/auth/session";
+import { hashRecoveryCode, generateEmergencyRecoveryCodes } from "@/lib/auth/password";
 import { safeRevalidatePath } from "./utils";
 
 export interface SessionInfo {
@@ -25,9 +25,17 @@ export interface SecurityEventLog {
   status: "Success" | "Verified" | "Authorized";
 }
 
+/**
+ * Loads verified security profile and real active sessions from PostgreSQL (SEC-001)
+ */
 export async function getSecurityData() {
   try {
+    const { session: adminSession, user } = await requireAdmin();
     const session = await getSession();
+    if (!session || session.sessionId !== adminSession.id || session.adminId !== user.id) {
+      throw new Error("SEC-001 Unauthorized: Valid MFA-verified admin session required.");
+    }
+    const adminEmail = session?.email || "admin@kewaflow.com";
 
     // Query real security and auth audit logs (SEC-007)
     const logs = await prisma.auditLog.findMany({
@@ -42,25 +50,35 @@ export async function getSecurityData() {
       take: 12,
     });
 
-    const activeSessions: SessionInfo[] = [];
+    let dbSessions: any[] = [];
+    if (session?.adminId) {
+      dbSessions = await prisma.adminSession.findMany({
+        where: {
+          userId: session.adminId,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    }
 
-    if (session) {
+    const activeSessions: SessionInfo[] = dbSessions.map((s) => ({
+      id: s.id,
+      device: s.userAgent ? s.userAgent.slice(0, 32) : "Administrator Terminal",
+      browser: "Authenticated Client (MFA)",
+      location: "Addis Ababa, Ethiopia",
+      ip: s.ipAddress || "127.0.0.1",
+      isCurrent: s.id === session?.sessionId,
+      lastActive: s.id === session?.sessionId ? "Active now" : formatTimeAgo(s.updatedAt || s.createdAt),
+    }));
+
+    if (activeSessions.length === 0 && session) {
       activeSessions.push({
         id: session.sessionId,
         device: "Current Administrator Terminal",
         browser: "Next.js Authenticated Client",
         location: "Addis Ababa, Ethiopia",
         ip: "127.0.0.1",
-        isCurrent: true,
-        lastActive: "Active now (MFA Verified)",
-      });
-    } else {
-      activeSessions.push({
-        id: "sess_current_admin",
-        device: "Workstation (Linux / Web)",
-        browser: "Google Chrome",
-        location: "Addis Ababa, Ethiopia",
-        ip: "196.188.142.74",
         isCurrent: true,
         lastActive: "Active now",
       });
@@ -71,15 +89,13 @@ export async function getSecurityData() {
       if (log.action.includes("APPROVE")) category = "approval";
       else if (log.action.includes("SESSION")) category = "session";
 
-      const timeAgo = formatTimeAgo(log.createdAt);
-
       return {
         id: log.id,
         event: log.action,
         category,
         location: log.ipAddress || "Addis Ababa, Ethiopia",
         device: log.userAgent ? log.userAgent.slice(0, 24) : "Chrome / Authenticated",
-        time: timeAgo,
+        time: formatTimeAgo(log.createdAt),
         status: "Verified",
       };
     });
@@ -89,7 +105,7 @@ export async function getSecurityData() {
       mfaEnabled: true,
       sessions: activeSessions,
       securityLogs: formattedLogs,
-      adminEmail: session?.email || "admin@kewaflow.com",
+      adminEmail,
     };
   } catch (error) {
     console.error("Failed to fetch security settings data:", error);
@@ -102,30 +118,87 @@ export async function getSecurityData() {
   }
 }
 
-export async function generateNewRecoveryCodes() {
+/**
+ * Revokes an active session immediately in PostgreSQL (SEC-001)
+ */
+export async function revokeAdminSession(sessionId: string) {
   try {
-    const session = await getSession();
-    const adminId = session?.adminId || "admin_yared";
+    const { user } = await requireAdmin();
 
-    // Generate 8 new SEC-006 break-glass codes
-    const newCodes: string[] = [];
-    for (let i = 0; i < 8; i++) {
-      const part1 = crypto.randomBytes(2).toString("hex").toUpperCase();
-      const part2 = crypto.randomBytes(2).toString("hex").toUpperCase();
-      newCodes.push(`KEWA-${part1}-${part2}`);
+    const targetSession = await prisma.adminSession.findFirst({
+      where: {
+        id: sessionId,
+        userId: user.id,
+      },
+    });
+
+    if (!targetSession) {
+      return { success: false, error: "Session not found or not owned by user." };
     }
 
-    // Write audit log (SEC-007)
+    await prisma.adminSession.update({
+      where: { id: sessionId },
+      data: { revokedAt: new Date() },
+    });
+
     await prisma.auditLog.create({
       data: {
-        actorId: adminId,
-        action: "AUTH_RECOVERY_CODES_REGENERATED",
-        entityType: "AdminAuth",
-        entityId: "recovery_codes",
-        metadata: {
-          generatedCount: newCodes.length,
-        },
+        actorId: user.id,
+        action: "AUTH_SESSION_REVOKED",
+        entityType: "AdminSession",
+        entityId: sessionId,
+        metadata: { userId: user.id },
       },
+    });
+
+    safeRevalidatePath("/settings/security");
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || "Failed to revoke session." };
+  }
+}
+
+/**
+ * Generates 8 new emergency recovery codes, saves their hashes into PostgreSQL,
+ * burns any previous unused codes, and returns plaintext codes once (SEC-006).
+ */
+export async function generateNewRecoveryCodes() {
+  try {
+    const { user } = await requireAdmin();
+
+    // 1. Generate 8 cryptographically random codes
+    const newCodes = generateEmergencyRecoveryCodes(8);
+
+    // 2. Persist in database atomically
+    await prisma.$transaction(async (tx) => {
+      // Invalidate existing unused codes
+      await tx.recoveryCode.deleteMany({
+        where: {
+          userId: user.id,
+          usedAt: null,
+        },
+      });
+
+      // Insert new hashed codes
+      await tx.recoveryCode.createMany({
+        data: newCodes.map((code) => ({
+          userId: user.id,
+          codeHash: hashRecoveryCode(code),
+        })),
+      });
+
+      // Write audit log (SEC-007)
+      await tx.auditLog.create({
+        data: {
+          actorId: user.id,
+          action: "AUTH_RECOVERY_CODES_REGENERATED",
+          entityType: "AdminAuth",
+          entityId: user.id,
+          metadata: {
+            generatedCount: newCodes.length,
+          },
+        },
+      });
     });
 
     safeRevalidatePath("/settings/security");
@@ -134,11 +207,11 @@ export async function generateNewRecoveryCodes() {
       success: true,
       codes: newCodes,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to generate recovery codes:", error);
     return {
       success: false,
-      error: "Failed to regenerate emergency recovery codes.",
+      error: error.message || "Failed to regenerate emergency recovery codes.",
     };
   }
 }
