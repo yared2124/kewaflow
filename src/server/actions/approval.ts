@@ -1,11 +1,12 @@
 "use server";
 
 import { prisma } from "@/lib/db/prisma";
-import { getSession } from "@/lib/auth/session";
+import { requireAdmin } from "@/lib/auth/session";
 import { safeRevalidatePath } from "./utils";
 
 export async function getPendingApprovals() {
   try {
+    await requireAdmin();
     const items = await prisma.contentItem.findMany({
       where: { reviewState: "NEEDS_REVIEW" },
       include: {
@@ -27,7 +28,7 @@ export async function getPendingApprovals() {
 }
 
 /**
- * Approve Content Version (APR-002, APR-006, APR-007, APR-009)
+ * Approve Content Version (APR-002, APR-006, APR-007, APR-009, SEC-001)
  */
 export async function approveContentVersion(payload: {
   contentItemId: string;
@@ -36,6 +37,8 @@ export async function approveContentVersion(payload: {
   reviewedDiff: boolean;
 }) {
   try {
+    const { user, session } = await requireAdmin();
+
     // APR-009: Checkbox mandatory
     if (!payload.confirmedExactFinal) {
       return {
@@ -44,12 +47,35 @@ export async function approveContentVersion(payload: {
       };
     }
 
+    if (!payload.reviewedDiff) {
+      return {
+        success: false,
+        error: "APR-009 Violation: You must review the version diff before approval.",
+      };
+    }
+
+    const item = await prisma.contentItem.findUnique({
+      where: { id: payload.contentItemId },
+      include: { currentVersion: true },
+    });
+
+    if (!item) {
+      return { success: false, error: "Content item not found." };
+    }
+
+    if (item.currentVersionId !== payload.contentVersionId) {
+      return {
+        success: false,
+        error: "APR-001/002 Violation: Cannot approve a version that is not the item's current version.",
+      };
+    }
+
     const version = await prisma.contentVersion.findUnique({
       where: { id: payload.contentVersionId },
     });
 
-    if (!version) {
-      return { success: false, error: "Content version not found." };
+    if (!version || version.contentItemId !== payload.contentItemId) {
+      return { success: false, error: "Content version not found or mismatched item." };
     }
 
     // APR-007: Block approval if unverified facts exist and are unresolved
@@ -61,9 +87,6 @@ export async function approveContentVersion(payload: {
       };
     }
 
-    const session = await getSession();
-    const adminId = session?.adminId || "admin_yared";
-    const adminSessionId = session?.sessionId || "sess_admin_verified";
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days (APR-006)
 
     const result = await prisma.$transaction(async (tx) => {
@@ -72,8 +95,8 @@ export async function approveContentVersion(payload: {
         data: {
           contentItemId: payload.contentItemId,
           contentVersionId: payload.contentVersionId,
-          adminId,
-          adminSessionId,
+          adminId: user.id,
+          adminSessionId: session.id,
           status: "ACTIVE",
           reviewedDiff: payload.reviewedDiff,
           confirmedExactFinal: payload.confirmedExactFinal,
@@ -92,7 +115,7 @@ export async function approveContentVersion(payload: {
       // Audit Log (SEC-007)
       await tx.auditLog.create({
         data: {
-          actorId: "admin_yared",
+          actorId: user.id,
           action: "APPROVE_CONTENT_VERSION",
           entityType: "ContentVersion",
           entityId: payload.contentVersionId,
@@ -111,14 +134,14 @@ export async function approveContentVersion(payload: {
     safeRevalidatePath("/dashboard");
     safeRevalidatePath("/calendar");
     return { success: true, ...result };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to approve content version:", error);
-    return { success: false, error: "Failed to approve content version." };
+    return { success: false, error: error.message || "Failed to approve content version." };
   }
 }
 
 /**
- * Reject Content Version
+ * Reject Content Version (SEC-001)
  */
 export async function rejectContentVersion(payload: {
   contentItemId: string;
@@ -126,6 +149,8 @@ export async function rejectContentVersion(payload: {
   reason?: string;
 }) {
   try {
+    const { user } = await requireAdmin();
+
     const updated = await prisma.$transaction(async (tx) => {
       const item = await tx.contentItem.update({
         where: { id: payload.contentItemId },
@@ -134,7 +159,7 @@ export async function rejectContentVersion(payload: {
 
       await tx.auditLog.create({
         data: {
-          actorId: "admin_yared",
+          actorId: user.id,
           action: "REJECT_CONTENT_VERSION",
           entityType: "ContentVersion",
           entityId: payload.contentVersionId,
@@ -150,14 +175,14 @@ export async function rejectContentVersion(payload: {
     safeRevalidatePath("/approvals");
     safeRevalidatePath("/dashboard");
     return { success: true, item: updated };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to reject content version:", error);
-    return { success: false, error: "Failed to reject content version." };
+    return { success: false, error: error.message || "Failed to reject content version." };
   }
 }
 
 /**
- * APR-007: Resolve Flagged Facts
+ * APR-007: Resolve Flagged Facts (SEC-001)
  * Allows Admin to substantiate or acknowledge flagged facts with an audit trail
  */
 export async function resolveFlaggedFacts(payload: {
@@ -165,6 +190,8 @@ export async function resolveFlaggedFacts(payload: {
   resolutionNotes: string;
 }) {
   try {
+    const { user } = await requireAdmin();
+
     const updated = await prisma.$transaction(async (tx) => {
       const version = await tx.contentVersion.update({
         where: { id: payload.contentVersionId },
@@ -175,7 +202,7 @@ export async function resolveFlaggedFacts(payload: {
 
       await tx.auditLog.create({
         data: {
-          actorId: "admin_yared",
+          actorId: user.id,
           action: "RESOLVE_FLAGGED_FACTS",
           entityType: "ContentVersion",
           entityId: payload.contentVersionId,
@@ -197,14 +224,25 @@ export async function resolveFlaggedFacts(payload: {
 }
 
 /**
- * ⚡ 1-Click Fast-Track Approval
- * Approves a content item with zero friction while maintaining full APR-001/002/007 cryptographic compliance.
+ * Fast-Track Approval
+ * Invariant: APR-009 mandates explicit review confirmation.
  */
 export async function fastTrackApprove(payload: {
   contentItemId: string;
+  confirmedExactFinal?: boolean;
   scheduledTime?: string | Date;
 }) {
   try {
+    const { user, session } = await requireAdmin();
+
+    // APR-009: Checkbox mandatory
+    if (!payload.confirmedExactFinal) {
+      return {
+        success: false,
+        error: "APR-009 Violation: You must confirm review of the exact final version.",
+      };
+    }
+
     const item = await prisma.contentItem.findUnique({
       where: { id: payload.contentItemId },
       include: { currentVersion: true },
@@ -224,9 +262,6 @@ export async function fastTrackApprove(payload: {
       };
     }
 
-    const session = await getSession();
-    const adminId = session?.adminId || "admin_yared";
-    const adminSessionId = session?.sessionId || "sess_admin_fast_track";
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days (APR-006)
 
     const finalScheduledAt = payload.scheduledTime
@@ -239,8 +274,8 @@ export async function fastTrackApprove(payload: {
         data: {
           contentItemId: item.id,
           contentVersionId: version.id,
-          adminId,
-          adminSessionId,
+          adminId: user.id,
+          adminSessionId: session.id,
           status: "ACTIVE",
           reviewedDiff: true,
           confirmedExactFinal: true,
@@ -261,8 +296,8 @@ export async function fastTrackApprove(payload: {
       // Audit Log (SEC-007)
       await tx.auditLog.create({
         data: {
-          actorId: adminId,
-          action: "FAST_TRACK_1CLICK_APPROVAL",
+          actorId: user.id,
+          action: "FAST_TRACK_APPROVAL",
           entityType: "ContentVersion",
           entityId: version.id,
           metadata: {
@@ -282,23 +317,42 @@ export async function fastTrackApprove(payload: {
     safeRevalidatePath("/calendar");
 
     return { success: true, ...result };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to fast-track approve content:", error);
-    return { success: false, error: "Failed to fast-track approve content." };
+    return { success: false, error: error.message || "Failed to fast-track approve content." };
   }
 }
 
 /**
- * ⚡ Batch Fast-Track Approval
- * Approves all clean, fact-verified pending drafts in a single click.
+ * Batch Fast-Track Approval
+ * Invariant: APR-009 mandates explicit review confirmation.
  */
-export async function batchFastTrackApprove(contentItemIds: string[]) {
+export async function batchFastTrackApprove(
+  payload:
+    | {
+        contentItemIds: string[];
+        confirmedExactFinal?: boolean;
+      }
+    | string[]
+) {
   try {
+    await requireAdmin();
+
+    const ids = Array.isArray(payload) ? payload : payload.contentItemIds;
+    const confirmed = Array.isArray(payload) ? false : Boolean(payload.confirmedExactFinal);
+
+    if (!confirmed) {
+      return {
+        success: false,
+        error: "APR-009 Violation: Batch approval requires explicit confirmation of exact final review.",
+      };
+    }
+
     let approvedCount = 0;
     let failedCount = 0;
 
-    for (const id of contentItemIds) {
-      const res = await fastTrackApprove({ contentItemId: id });
+    for (const id of ids) {
+      const res = await fastTrackApprove({ contentItemId: id, confirmedExactFinal: true });
       if (res.success) {
         approvedCount++;
       } else {
@@ -315,9 +369,8 @@ export async function batchFastTrackApprove(contentItemIds: string[]) {
       approvedCount,
       failedCount,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to batch approve items:", error);
-    return { success: false, error: "Failed to batch approve content items." };
+    return { success: false, error: error.message || "Failed to batch approve content items." };
   }
 }
-
