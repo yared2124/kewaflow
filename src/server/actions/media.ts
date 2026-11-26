@@ -4,7 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 import { prisma } from "@/lib/db/prisma";
-import { getSession } from "@/lib/auth/session";
+import { requireAdmin } from "@/lib/auth/session";
 import { computeContentVersionHash } from "@/lib/crypto";
 import { safeRevalidatePath } from "./utils";
 
@@ -65,6 +65,7 @@ function verifyMagicBytes(buffer: Buffer): { valid: boolean; format: "JPG" | "PN
  */
 export async function getMediaAssets() {
   try {
+    await requireAdmin();
     const versions = await prisma.contentVersion.findMany({
       select: {
         id: true,
@@ -142,6 +143,7 @@ export async function uploadMediaAsset(formData: FormData): Promise<{
   error?: string;
 }> {
   try {
+    const { user } = await requireAdmin();
     const file = formData.get("file") as File | null;
     if (!file) {
       return { success: false, error: "No file provided for upload." };
@@ -185,9 +187,8 @@ export async function uploadMediaAsset(formData: FormData): Promise<{
     await fs.writeFile(filePath, buffer);
     const imageUrl = `/uploads/${fileName}`;
 
-    // Record in PostgreSQL by associating with Media Library Item
-    const session = await getSession();
-    const adminId = session?.adminId || "admin_yared";
+    // Record in PostgreSQL by associating with Media Library Item (SEC-001)
+    const adminId = user.id;
 
     let mediaLibraryItem = await prisma.contentItem.findFirst({
       where: { title: "Media Library Assets" },
