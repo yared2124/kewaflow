@@ -2,7 +2,7 @@
 
 import crypto from "crypto";
 import { prisma } from "@/lib/db/prisma";
-import { getSession } from "@/lib/auth/session";
+import { requireAdmin } from "@/lib/auth/session";
 import { getBrandProfile } from "./brand";
 import { executeAiGeneration } from "@/providers";
 import { BrandContext } from "@/providers/types";
@@ -30,6 +30,7 @@ const STOCK_CREATIVE_MEDIA: Record<string, string> = {
  */
 export async function generateAutomatedDrafts(count: number = 3): Promise<AutomatedDraftResult> {
   try {
+    const { user } = await requireAdmin();
     const brandRes = await getBrandProfile();
     if (!brandRes.success || !brandRes.profile) {
       return { success: false, createdCount: 0, error: "Brand profile not configured." };
@@ -61,8 +62,7 @@ export async function generateAutomatedDrafts(count: number = 3): Promise<Automa
       aiMonthlyBudgetCap: Number(brand.aiMonthlyBudgetCap || 0),
     };
 
-    const session = await getSession();
-    const adminId = session?.adminId || "admin_yared";
+    const adminId = user.id;
 
     const createdItems: Array<{ id: string; title: string; scheduledAt: string }> = [];
 
@@ -177,12 +177,12 @@ export async function generateAutomatedDrafts(count: number = 3): Promise<Automa
       createdCount: createdItems.length,
       items: createdItems,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to generate automated drafts:", error);
     return {
       success: false,
       createdCount: 0,
-      error: "Automated draft generation failed.",
+      error: error?.message || "Automated draft generation failed.",
     };
   }
 }
