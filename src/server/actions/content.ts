@@ -1,16 +1,19 @@
 "use server";
 
 import { prisma } from "@/lib/db/prisma";
-import { computeContentVersionHash } from "@/lib/crypto";
+import { computeContentVersionHash, computeMediaHashes } from "@/lib/crypto";
 import { onContentModified } from "@/lib/state-machine/transitions";
+import { requireAdmin } from "@/lib/auth/session";
 import { safeRevalidatePath } from "./utils";
 import { executeAiGeneration } from "@/providers";
 import { BrandContext } from "@/providers/types";
+import { publishingQueue } from "@/jobs/queue";
 
 export async function getContentItems(filter?: {
   reviewState?: "DRAFT" | "GENERATING" | "NEEDS_REVIEW" | "APPROVED" | "REJECTED";
 }) {
   try {
+    await requireAdmin();
     const items = await prisma.contentItem.findMany({
       where: filter?.reviewState ? { reviewState: filter.reviewState } : undefined,
       include: {
@@ -35,7 +38,7 @@ export async function getContentItems(filter?: {
 
 /**
  * Real AI Generation Server Action
- * Grounded strictly in PostgreSQL BrandProfile (BRD-001, BRD-002, APR-007, NFR-006)
+ * Grounded strictly in PostgreSQL BrandProfile (BRD-001, BRD-002, APR-007, NFR-006, SEC-001)
  */
 export async function generateContentWithAI(input: {
   serviceName: string;
@@ -44,6 +47,8 @@ export async function generateContentWithAI(input: {
   tone?: "professional" | "innovative" | "authoritative" | "conversational";
 }) {
   try {
+    const { user } = await requireAdmin();
+
     const profile = await prisma.brandProfile.findUnique({
       where: { id: "default" },
     });
@@ -75,7 +80,7 @@ export async function generateContentWithAI(input: {
     // Audit log (SEC-007)
     await prisma.auditLog.create({
       data: {
-        actorId: "admin_yared",
+        actorId: user.id,
         action: "AI_CONTENT_GENERATED",
         entityType: "BrandProfile",
         entityId: profile.id,
@@ -110,9 +115,13 @@ export async function createContentItem(payload: {
   flaggedFacts?: string[];
 }) {
   try {
+    const { user } = await requireAdmin();
+
+    const mediaHashes = computeMediaHashes(payload.mediaUrls || []);
+
     const versionHash = computeContentVersionHash({
       caption: payload.caption,
-      mediaHashes: [],
+      mediaHashes,
       destinationPageId: payload.destinationPageId,
       ctaUrl: payload.ctaUrl,
       disclosures: payload.disclosures,
@@ -137,7 +146,7 @@ export async function createContentItem(payload: {
             versionHash,
             caption: payload.caption,
             mediaUrls: payload.mediaUrls,
-            mediaHashes: [],
+            mediaHashes,
             destinationPageId: payload.destinationPageId,
             ctaUrl: payload.ctaUrl,
             disclosures: payload.disclosures,
@@ -160,7 +169,7 @@ export async function createContentItem(payload: {
     // Audit Log (SEC-007)
     await prisma.auditLog.create({
       data: {
-        actorId: "admin_yared",
+        actorId: user.id,
         action: "CREATE_CONTENT",
         entityType: "ContentItem",
         entityId: item.id,
@@ -177,9 +186,9 @@ export async function createContentItem(payload: {
     safeRevalidatePath("/approvals");
     safeRevalidatePath("/dashboard");
     return { success: true, item };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to create content item:", error);
-    return { success: false, error: "Failed to create content item." };
+    return { success: false, error: error.message || "Failed to create content item." };
   }
 }
 
@@ -204,6 +213,8 @@ export async function updateContentItem(
   }
 ) {
   try {
+    const { user } = await requireAdmin();
+
     const existing = await prisma.contentItem.findUnique({
       where: { id: contentItemId },
       include: {
@@ -216,9 +227,12 @@ export async function updateContentItem(
     }
 
     const nextVersionNumber = (existing.versions[0]?.versionNumber || 0) + 1;
+    const priorVersion = existing.versions[0];
+    const mediaHashes = computeMediaHashes(payload.mediaUrls || []);
+
     const newHash = computeContentVersionHash({
       caption: payload.caption,
-      mediaHashes: [],
+      mediaHashes,
       destinationPageId: payload.destinationPageId,
       ctaUrl: payload.ctaUrl,
       disclosures: payload.disclosures,
@@ -226,11 +240,29 @@ export async function updateContentItem(
       adConfig: payload.adConfig,
     });
 
+    // APR-003(d): Cancel any queued job referencing prior version
+    if (priorVersion) {
+      const priorJobId = `publish_${contentItemId}_${priorVersion.id}`;
+      try {
+        const job = await publishingQueue.getJob(priorJobId);
+        if (job) {
+          await job.remove();
+          console.log(`[ContentUpdate] Cancelled prior queued job ${priorJobId} per APR-003(d)`);
+        }
+      } catch (err: any) {
+        console.warn(`[ContentUpdate] Note: Could not remove prior job ${priorJobId}:`, err.message);
+      }
+    }
+
     const nextStates = onContentModified({
       reviewState: existing.reviewState,
       jobState: existing.jobState,
       publicationOutcome: existing.publicationOutcome,
     });
+
+    // Retain flagged facts status if not explicitly resolved (APR-007)
+    const flaggedFacts = priorVersion?.flaggedFacts || [];
+    const flaggedFactsResolved = priorVersion ? priorVersion.flaggedFactsResolved : true;
 
     const result = await prisma.$transaction(async (tx) => {
       // Invalidate existing active approvals (APR-003b)
@@ -253,12 +285,14 @@ export async function updateContentItem(
           versionHash: newHash,
           caption: payload.caption,
           mediaUrls: payload.mediaUrls,
-          mediaHashes: [],
+          mediaHashes,
           destinationPageId: payload.destinationPageId,
           ctaUrl: payload.ctaUrl,
           disclosures: payload.disclosures,
           scheduledTime: payload.scheduledTime,
           adConfig: payload.adConfig,
+          flaggedFacts,
+          flaggedFactsResolved,
         },
       });
 
@@ -277,7 +311,7 @@ export async function updateContentItem(
 
       await tx.auditLog.create({
         data: {
-          actorId: "admin_yared",
+          actorId: user.id,
           action: "UPDATE_AND_INVALIDATE_APPROVAL",
           entityType: "ContentItem",
           entityId: contentItemId,
@@ -297,8 +331,8 @@ export async function updateContentItem(
     safeRevalidatePath("/dashboard");
     safeRevalidatePath("/calendar");
     return { success: true, item: result };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to update content item:", error);
-    return { success: false, error: "Failed to update content item." };
+    return { success: false, error: error.message || "Failed to update content item." };
   }
 }
