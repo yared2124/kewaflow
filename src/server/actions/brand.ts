@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/db/prisma";
+import { requireAdmin } from "@/lib/auth/session";
 import { safeRevalidatePath } from "./utils";
 
 function serializeBrandProfile<T extends { aiMonthlyBudgetCap?: any }>(
@@ -14,6 +15,7 @@ function serializeBrandProfile<T extends { aiMonthlyBudgetCap?: any }>(
 
 export async function getBrandProfile() {
   try {
+    await requireAdmin();
     const profile = await prisma.brandProfile.findUnique({
       where: { id: "default" },
     });
@@ -33,6 +35,8 @@ export async function updateBrandProfile(data: {
   aiMonthlyBudgetCap?: number;
 }) {
   try {
+    const { user } = await requireAdmin();
+
     const updated = await prisma.brandProfile.upsert({
       where: { id: "default" },
       update: {
@@ -57,7 +61,7 @@ export async function updateBrandProfile(data: {
     // SEC-007: Append-only audit log
     await prisma.auditLog.create({
       data: {
-        actorId: "admin_yared",
+        actorId: user.id,
         action: "UPDATE_BRAND_PROFILE",
         entityType: "BrandProfile",
         entityId: "default",
@@ -73,8 +77,8 @@ export async function updateBrandProfile(data: {
     safeRevalidatePath("/brand");
     safeRevalidatePath("/dashboard");
     return { success: true, profile: serializeBrandProfile(updated) };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to update brand profile:", error);
-    return { success: false, error: "Failed to update brand profile." };
+    return { success: false, error: error.message || "Failed to update brand profile." };
   }
 }
