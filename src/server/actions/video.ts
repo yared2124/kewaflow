@@ -6,7 +6,7 @@ import crypto from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { prisma } from "@/lib/db/prisma";
-import { getSession } from "@/lib/auth/session";
+import { requireAdmin } from "@/lib/auth/session";
 import { getBrandProfile } from "./brand";
 import { safeRevalidatePath } from "./utils";
 import { validateServiceGrounding } from "@/modules/ai/grounding";
@@ -53,6 +53,7 @@ export async function generateMotionVideo(
   input: MotionVideoInput
 ): Promise<MotionVideoResult> {
   try {
+    await requireAdmin();
     const brandRes = await getBrandProfile();
     const brand = brandRes.profile;
     if (!brand) {
@@ -187,9 +188,9 @@ export async function generateMotionVideo(
     const sha256Hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
     const videoUrl = `/uploads/videos/${outputFilename}`;
 
-    // 7. Write Audit Log (SEC-007)
-    const session = await getSession();
-    const adminId = session?.adminId || "admin_yared";
+    // 7. Write Audit Log (SEC-001, SEC-007)
+    const { user } = await requireAdmin();
+    const adminId = user.id;
 
     await prisma.auditLog.create({
       data: {
